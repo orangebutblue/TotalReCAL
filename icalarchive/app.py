@@ -388,9 +388,11 @@ async def list_rules():
 @app.post("/api/rules")
 async def create_rule(rule: RuleCreate):
     """Create a new rule."""
+    import uuid
     config = state.config_manager.load()
     
-    rule_id = f"rule_{len(config.rules) + 1}"
+    # Use UUID to avoid ID collisions
+    rule_id = f"rule_{uuid.uuid4().hex[:8]}"
     rule_config = RuleConfig(
         rule_id=rule_id,
         rule_type=rule.rule_type,

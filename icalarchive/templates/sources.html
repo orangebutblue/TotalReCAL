@@ -53,7 +53,7 @@
                 {% for source in sources %}
                 <tr>
                     <td><strong>{{ source.name }}</strong></td>
-                    <td><small>{{ source.url[:50] }}...</small></td>
+                    <td><small>{{ source.url[:50] }}{% if source.url|length > 50 %}...{% endif %}</small></td>
                     <td>
                         <input type="number" class="form-control form-control-sm" 
                                value="{{ source.fetch_interval_minutes }}" 

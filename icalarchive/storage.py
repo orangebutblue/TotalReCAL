@@ -149,7 +149,10 @@ class EventStore:
         
         last_fetch = None
         if snapshot_path.exists():
-            last_fetch = datetime.fromtimestamp(snapshot_path.stat().st_mtime)
+            # Use UTC-aware datetime for consistency
+            from datetime import timezone
+            timestamp = snapshot_path.stat().st_mtime
+            last_fetch = datetime.fromtimestamp(timestamp, tz=timezone.utc)
         
         return {
             'event_count': len(events),
