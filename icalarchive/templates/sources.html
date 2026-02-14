@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Sources - ICalArchive{% endblock %}
+
+{% block content %}
+<h1>Sources</h1>
+
+<div class="card mt-3">
+    <div class="card-header">
+        <h5>Add New Source</h5>
+    </div>
+    <div class="card-body">
+        <form id="addSourceForm" class="row g-3">
+            <div class="col-md-4">
+                <label for="name" class="form-label">Name</label>
+                <input type="text" class="form-control" id="name" name="name" required>
+            </div>
+            <div class="col-md-4">
+                <label for="url" class="form-label">URL</label>
+                <input type="url" class="form-control" id="url" name="url" required>
+            </div>
+            <div class="col-md-2">
+                <label for="interval" class="form-label">Interval (min)</label>
+                <input type="number" class="form-control" id="interval" name="fetch_interval_minutes" value="30" min="1" required>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">&nbsp;</label><br>
+                <button type="submit" class="btn btn-primary">Add Source</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">
+        <h5>Existing Sources</h5>
+    </div>
+    <div class="card-body">
+        {% if sources %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>URL</th>
+                    <th>Interval (min)</th>
+                    <th>Events</th>
+                    <th>Last Fetch</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for source in sources %}
+                <tr>
+                    <td><strong>{{ source.name }}</strong></td>
+                    <td><small>{{ source.url[:50] }}...</small></td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm" 
+                               value="{{ source.fetch_interval_minutes }}" 
+                               onchange="updateInterval('{{ source.name }}', this.value)"
+                               min="1" style="width: 80px;">
+                    </td>
+                    <td>{{ source.event_count }}</td>
+                    <td>
+                        {% if source.last_fetch %}
+                            <small>{{ source.last_fetch[:19] }}</small>
+                        {% else %}
+                            <small class="text-muted">Never</small>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if source.enabled %}
+                        <span class="badge bg-success">Enabled</span>
+                        {% else %}
+                        <span class="badge bg-secondary">Disabled</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="fetchNow('{{ source.name }}')">Fetch Now</button>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteSource('{{ source.name }}')">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No sources configured yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.getElementById('addSourceForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const data = {
+        name: formData.get('name'),
+        url: formData.get('url'),
+        fetch_interval_minutes: parseInt(formData.get('fetch_interval_minutes'))
+    };
+    
+    try {
+        const response = await fetch('/api/sources', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        if (response.ok) {
+            location.reload();
+        } else {
+            const error = await response.json();
+            alert('Error: ' + (error.detail || 'Failed to add source'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+async function updateInterval(name, minutes) {
+    try {
+        const response = await fetch(`/api/sources/${encodeURIComponent(name)}`, {
+            method: 'PATCH',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({fetch_interval_minutes: parseInt(minutes)})
+        });
+        if (response.ok) {
+            alert('Interval updated');
+        } else {
+            alert('Failed to update interval');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function fetchNow(name) {
+    if (!confirm(`Fetch ${name} now?`)) return;
+    
+    try {
+        const response = await fetch(`/api/sources/${encodeURIComponent(name)}/fetch`, {
+            method: 'POST'
+        });
+        if (response.ok) {
+            alert('Fetch triggered');
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            alert('Failed to trigger fetch');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function deleteSource(name) {
+    if (!confirm(`Delete source ${name}? (Stored events will be kept)`)) return;
+    
+    try {
+        const response = await fetch(`/api/sources/${encodeURIComponent(name)}`, {
+            method: 'DELETE'
+        });
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to delete source');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

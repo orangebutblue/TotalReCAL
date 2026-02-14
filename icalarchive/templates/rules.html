@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block title %}Rules - ICalArchive{% endblock %}
+
+{% block content %}
+<h1>Auto-Hide Rules</h1>
+
+<div class="card mt-3">
+    <div class="card-header">
+        <h5>Add New Rule</h5>
+    </div>
+    <div class="card-body">
+        <form id="addRuleForm">
+            <div class="mb-3">
+                <label for="ruleType" class="form-label">Rule Type</label>
+                <select class="form-select" id="ruleType" required>
+                    <option value="">Select rule type...</option>
+                    <option value="category_exclude">Exclude by Category</option>
+                    <option value="summary_regex">Hide by Summary Regex</option>
+                    <option value="description_regex">Hide by Description Regex</option>
+                </select>
+            </div>
+            
+            <div id="categoryExcludeParams" style="display: none;">
+                <div class="mb-3">
+                    <label for="excludeCategories" class="form-label">Categories to Exclude (comma-separated)</label>
+                    <input type="text" class="form-control" id="excludeCategories" placeholder="e.g., Cancelled,Tentative">
+                </div>
+            </div>
+            
+            <div id="summaryRegexParams" style="display: none;">
+                <div class="mb-3">
+                    <label for="summaryPattern" class="form-label">Summary Pattern (regex)</label>
+                    <input type="text" class="form-control" id="summaryPattern" placeholder="e.g., cancelled|postponed">
+                </div>
+            </div>
+            
+            <div id="descriptionRegexParams" style="display: none;">
+                <div class="mb-3">
+                    <label for="descriptionPattern" class="form-label">Description Pattern (regex)</label>
+                    <input type="text" class="form-control" id="descriptionPattern" placeholder="e.g., spam|test">
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Add Rule</button>
+        </form>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">
+        <h5>Active Rules</h5>
+    </div>
+    <div class="card-body">
+        {% if rules %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Rule ID</th>
+                    <th>Type</th>
+                    <th>Parameters</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rule in rules %}
+                <tr>
+                    <td><code>{{ rule.rule_id }}</code></td>
+                    <td><span class="badge bg-info">{{ rule.rule_type }}</span></td>
+                    <td>
+                        <small>
+                            {% for key, value in rule.params.items() %}
+                            <div><strong>{{ key }}:</strong> {{ value }}</div>
+                            {% endfor %}
+                        </small>
+                    </td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteRule('{{ rule.rule_id }}')">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No rules configured yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ruleType = document.getElementById('ruleType');
+const categoryParams = document.getElementById('categoryExcludeParams');
+const summaryParams = document.getElementById('summaryRegexParams');
+const descriptionParams = document.getElementById('descriptionRegexParams');
+
+ruleType.addEventListener('change', () => {
+    categoryParams.style.display = 'none';
+    summaryParams.style.display = 'none';
+    descriptionParams.style.display = 'none';
+    
+    if (ruleType.value === 'category_exclude') {
+        categoryParams.style.display = 'block';
+    } else if (ruleType.value === 'summary_regex') {
+        summaryParams.style.display = 'block';
+    } else if (ruleType.value === 'description_regex') {
+        descriptionParams.style.display = 'block';
+    }
+});
+
+document.getElementById('addRuleForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const type = ruleType.value;
+    let params = {};
+    
+    if (type === 'category_exclude') {
+        const categories = document.getElementById('excludeCategories').value
+            .split(',').map(s => s.trim()).filter(s => s);
+        params = { categories };
+    } else if (type === 'summary_regex') {
+        params = { pattern: document.getElementById('summaryPattern').value };
+    } else if (type === 'description_regex') {
+        params = { pattern: document.getElementById('descriptionPattern').value };
+    }
+    
+    const data = { rule_type: type, params };
+    
+    try {
+        const response = await fetch('/api/rules', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        if (response.ok) {
+            location.reload();
+        } else {
+            const error = await response.json();
+            alert('Error: ' + (error.detail || 'Failed to add rule'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+});
+
+async function deleteRule(ruleId) {
+    if (!confirm(`Delete rule ${ruleId}?`)) return;
+    
+    try {
+        const response = await fetch(`/api/rules/${encodeURIComponent(ruleId)}`, {
+            method: 'DELETE'
+        });
+        if (response.ok) {
+            location.reload();
+        } else {
+            alert('Failed to delete rule');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

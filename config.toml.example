@@ -1,0 +1,28 @@
+# Example configuration for ICalArchive
+# This file is auto-generated. You can edit it directly or use the Web UI.
+
+# Port for serving calendar feeds (can be behind reverse proxy)
+calendar_port = 8000
+
+# Port for Web UI (internal only, no auth)
+ui_port = 8001
+
+# Sources - external iCal feeds to fetch
+# [sources.example]
+# url = "https://example.com/calendar.ics"
+# fetch_interval_minutes = 30
+# enabled = true
+
+# Outputs - filtered calendar feeds to serve
+# [outputs.all]
+# # Serves all events not hidden
+
+# [outputs.work_only]
+# filter_by_category = ["Work"]
+# include_sources = ["work"]
+
+# Rules - auto-hide rules applied at serve time
+# [[rules]]
+# rule_id = "rule_1"
+# rule_type = "category_exclude"
+# params = { categories = ["Spam", "Test"] }
