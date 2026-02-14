@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}{% if source %}Edit{% else %}Add{% endif %} Source - TotalReCAL{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>{% if source %}Edit{% else %}Add{% endif %} Source</h2>
+    
+    <form method="POST" action="{% if source %}/sources/{{ source.id }}/edit{% else %}/sources/add{% endif %}">
+        <div class="form-group">
+            <label for="name">Name:</label>
+            <input type="text" id="name" name="name" value="{% if source %}{{ source.name }}{% endif %}" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="url">iCal URL:</label>
+            <input type="url" id="url" name="url" value="{% if source %}{{ source.url }}{% endif %}" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="fetch_interval">Fetch Interval (minutes):</label>
+            <input type="number" id="fetch_interval" name="fetch_interval" value="{% if source %}{{ source.fetch_interval_minutes }}{% else %}60{% endif %}" min="1" required>
+        </div>
+        
+        {% if source %}
+        <div class="form-group">
+            <div class="checkbox-group">
+                <input type="checkbox" id="enabled" name="enabled" value="true" {% if source.enabled %}checked{% endif %}>
+                <label for="enabled">Enabled</label>
+            </div>
+        </div>
+        {% endif %}
+        
+        <div style="margin-top: 1.5rem;">
+            <button type="submit" class="btn btn-success">Save</button>
+            <a href="/sources" class="btn">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

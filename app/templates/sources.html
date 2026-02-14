@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Sources - TotalReCAL{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2>iCal Sources</h2>
+        <a href="/sources/add" class="btn">Add Source</a>
+    </div>
+    
+    {% if sources %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>URL</th>
+                <th>Status</th>
+                <th>Last Fetch</th>
+                <th>Interval (min)</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for source in sources %}
+            <tr>
+                <td>{{ source.name }}</td>
+                <td><div class="feed-url">{{ source.url }}</div></td>
+                <td>
+                    <span class="status-badge {% if source.enabled %}status-enabled{% else %}status-disabled{% endif %}">
+                        {% if source.enabled %}Enabled{% else %}Disabled{% endif %}
+                    </span>
+                </td>
+                <td>{% if source.last_fetch %}{{ source.last_fetch }}{% else %}Never{% endif %}</td>
+                <td>{{ source.fetch_interval_minutes }}</td>
+                <td class="actions">
+                    <a href="/sources/{{ source.id }}/edit" class="btn btn-small">Edit</a>
+                    <form method="POST" action="/sources/{{ source.id }}/delete" style="display: inline;">
+                        <button type="submit" class="btn btn-small btn-danger" onclick="return confirm('Delete this source?')">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No sources yet. <a href="/sources/add">Add your first source</a> to get started.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

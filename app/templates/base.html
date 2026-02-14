@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}TotalReCAL{% endblock %}</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 1rem 0;
+            margin-bottom: 2rem;
+        }
+        
+        header h1 {
+            font-size: 1.8rem;
+        }
+        
+        nav {
+            margin-top: 1rem;
+        }
+        
+        nav a {
+            color: white;
+            text-decoration: none;
+            padding: 0.5rem 1rem;
+            margin-right: 0.5rem;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        
+        nav a:hover, nav a.active {
+            background-color: #34495e;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 0.5rem 1rem;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .btn:hover {
+            background-color: #2980b9;
+        }
+        
+        .btn-danger {
+            background-color: #e74c3c;
+        }
+        
+        .btn-danger:hover {
+            background-color: #c0392b;
+        }
+        
+        .btn-success {
+            background-color: #27ae60;
+        }
+        
+        .btn-success:hover {
+            background-color: #229954;
+        }
+        
+        .btn-small {
+            padding: 0.3rem 0.6rem;
+            font-size: 0.9rem;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 0.75rem;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+        }
+        
+        .form-group {
+            margin-bottom: 1rem;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 0.25rem;
+            font-weight: 500;
+        }
+        
+        input[type="text"],
+        input[type="url"],
+        input[type="number"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 0.5rem;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .checkbox-group {
+            margin-top: 0.5rem;
+        }
+        
+        .checkbox-group label {
+            display: inline;
+            margin-left: 0.5rem;
+            font-weight: normal;
+        }
+        
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: #999;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        
+        .status-enabled {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        
+        .status-disabled {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        
+        .status-hidden {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        
+        .feed-url {
+            font-family: monospace;
+            background-color: #f8f9fa;
+            padding: 0.5rem;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+        
+        .actions {
+            white-space: nowrap;
+        }
+        
+        .actions form {
+            display: inline;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>📅 TotalReCAL</h1>
+            <nav>
+                <a href="/">Home</a>
+                <a href="/sources">Sources</a>
+                <a href="/outputs">Outputs</a>
+                <a href="/events">Events</a>
+                <a href="/rules">Auto-Hide Rules</a>
+            </nav>
+        </div>
+    </header>
+    
+    <div class="container">
+        {% block content %}{% endblock %}
+    </div>
+</body>
+</html>

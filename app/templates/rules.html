@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Auto-Hide Rules - TotalReCAL{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2>Auto-Hide Rules</h2>
+        <a href="/rules/add" class="btn">Add Rule</a>
+    </div>
+    
+    <p style="margin-bottom: 1rem; color: #666;">
+        Auto-hide rules automatically hide events based on time overlap between two patterns.
+    </p>
+    
+    {% if rules %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Pattern 1</th>
+                <th>Pattern 2</th>
+                <th>Hide Pattern</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for rule in rules %}
+            <tr>
+                <td>{{ rule.name }}</td>
+                <td><code>{{ rule.pattern1 }}</code></td>
+                <td><code>{{ rule.pattern2 }}</code></td>
+                <td>{{ rule.hide_pattern }}</td>
+                <td>
+                    <span class="status-badge {% if rule.enabled %}status-enabled{% else %}status-disabled{% endif %}">
+                        {% if rule.enabled %}Enabled{% else %}Disabled{% endif %}
+                    </span>
+                </td>
+                <td class="actions">
+                    <a href="/rules/{{ rule.id }}/edit" class="btn btn-small">Edit</a>
+                    <form method="POST" action="/rules/{{ rule.id }}/delete" style="display: inline;">
+                        <button type="submit" class="btn btn-small btn-danger" onclick="return confirm('Delete this rule?')">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No auto-hide rules yet. <a href="/rules/add">Create your first rule</a>.</p>
+    </div>
+    {% endif %}
+</div>
+
+<div class="card">
+    <h3>About Auto-Hide Rules</h3>
+    <p>Auto-hide rules help you automatically hide events when they overlap with other events. For example:</p>
+    <ul style="margin-left: 2rem; margin-top: 1rem;">
+        <li>Hide "On-call" events when they overlap with "Vacation" events</li>
+        <li>Hide "Meeting" events when they overlap with "Out of Office" events</li>
+    </ul>
+    <p style="margin-top: 1rem;">
+        Use regex patterns to match event summaries. The "Hide Pattern" determines which event to hide ("1" or "2").
+    </p>
+</div>
+{% endblock %}

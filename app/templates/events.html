@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Events - TotalReCAL{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2>All Events</h2>
+        <div>
+            <select onchange="window.location.href='/events?source_id=' + this.value" style="padding: 0.5rem;">
+                <option value="">All Sources</option>
+                {% for source_id, source in sources.items() %}
+                <option value="{{ source_id }}" {% if selected_source == source_id %}selected{% endif %}>
+                    {{ source.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
+    
+    {% if events %}
+    <table>
+        <thead>
+            <tr>
+                <th>Summary</th>
+                <th>Start</th>
+                <th>Categories</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for event in events %}
+            <tr>
+                <td>{{ event.summary or '(No summary)' }}</td>
+                <td>{{ event.dtstart or '-' }}</td>
+                <td>
+                    {% if event.categories %}
+                        {{ event.categories|join(', ') }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>
+                    {% if event.source_id in sources %}
+                        {{ sources[event.source_id].name }}
+                    {% else %}
+                        {{ event.source_id }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if event.manually_hidden %}
+                    <span class="status-badge status-hidden">Hidden</span>
+                    {% else %}
+                    <span class="status-badge status-enabled">Visible</span>
+                    {% endif %}
+                </td>
+                <td class="actions">
+                    {% if event.manually_hidden %}
+                    <form method="POST" action="/events/{{ event.uid }}/show" style="display: inline;">
+                        <button type="submit" class="btn btn-small btn-success">Show</button>
+                    </form>
+                    {% else %}
+                    <form method="POST" action="/events/{{ event.uid }}/hide" style="display: inline;">
+                        <button type="submit" class="btn btn-small">Hide</button>
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No events yet. Sources will be fetched automatically, or you can wait for the periodic update.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

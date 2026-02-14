@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block title %}Outputs - TotalReCAL{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2>Output Feeds</h2>
+        <a href="/outputs/add" class="btn">Add Output</a>
+    </div>
+    
+    {% if outputs %}
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Feed URL</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for output in outputs %}
+            <tr>
+                <td>{{ output.name }}</td>
+                <td>{{ output.description or '-' }}</td>
+                <td>
+                    <div class="feed-url">
+                        <a href="/feeds/{{ output.id }}.ics" target="_blank">/feeds/{{ output.id }}.ics</a>
+                    </div>
+                </td>
+                <td class="actions">
+                    <a href="/outputs/{{ output.id }}/edit" class="btn btn-small">Edit</a>
+                    <form method="POST" action="/outputs/{{ output.id }}/delete" style="display: inline;">
+                        <button type="submit" class="btn btn-small btn-danger" onclick="return confirm('Delete this output?')">Delete</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <div class="empty-state">
+        <p>No outputs yet. <a href="/outputs/add">Create your first output feed</a>.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

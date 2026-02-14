@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+
+{% block title %}{% if rule %}Edit{% else %}Add{% endif %} Auto-Hide Rule - TotalReCAL{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>{% if rule %}Edit{% else %}Add{% endif %} Auto-Hide Rule</h2>
+    
+    <form method="POST" action="{% if rule %}/rules/{{ rule.id }}/edit{% else %}/rules/add{% endif %}">
+        <div class="form-group">
+            <label for="name">Rule Name:</label>
+            <input type="text" id="name" name="name" value="{% if rule %}{{ rule.name }}{% endif %}" required>
+        </div>
+        
+        <div class="form-group">
+            <label for="pattern1">Pattern 1 (regex for summary):</label>
+            <input type="text" id="pattern1" name="pattern1" value="{% if rule %}{{ rule.pattern1 }}{% endif %}" required>
+            <small style="color: #666;">Example: (?i)vacation|holiday</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="pattern2">Pattern 2 (regex for summary):</label>
+            <input type="text" id="pattern2" name="pattern2" value="{% if rule %}{{ rule.pattern2 }}{% endif %}" required>
+            <small style="color: #666;">Example: (?i)on.?call</small>
+        </div>
+        
+        <div class="form-group">
+            <label for="hide_pattern">Hide Pattern:</label>
+            <select id="hide_pattern" name="hide_pattern" required>
+                <option value="1" {% if rule and rule.hide_pattern == "1" %}selected{% endif %}>Hide Pattern 1</option>
+                <option value="2" {% if rule and rule.hide_pattern == "2" %}selected{% endif %}>Hide Pattern 2</option>
+            </select>
+            <small style="color: #666;">When events match both patterns and overlap, which one should be hidden?</small>
+        </div>
+        
+        {% if rule %}
+        <div class="form-group">
+            <div class="checkbox-group">
+                <input type="checkbox" id="enabled" name="enabled" value="true" {% if rule.enabled %}checked{% endif %}>
+                <label for="enabled">Enabled</label>
+            </div>
+        </div>
+        {% endif %}
+        
+        <div style="margin-top: 1.5rem;">
+            <button type="submit" class="btn btn-success">Save</button>
+            <a href="/rules" class="btn">Cancel</a>
+        </div>
+    </form>
+</div>
+
+<div class="card">
+    <h3>How It Works</h3>
+    <p>When this rule is enabled and applied to an output:</p>
+    <ol style="margin-left: 2rem; margin-top: 1rem;">
+        <li>Find all events matching Pattern 1</li>
+        <li>Find all events matching Pattern 2</li>
+        <li>Check for time overlaps between matching events</li>
+        <li>Hide events from the specified pattern when overlap is detected</li>
+    </ol>
+</div>
+{% endblock %}

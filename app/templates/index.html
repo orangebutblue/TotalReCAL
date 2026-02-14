@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Home - TotalReCAL{% endblock %}
+
+{% block content %}
+<div class="card">
+    <h2>Welcome to TotalReCAL</h2>
+    <p>A powerful iCal feed aggregator and filter with the following features:</p>
+    <ul style="margin-left: 2rem; margin-top: 1rem;">
+        <li>Subscribe to multiple remote iCal feeds</li>
+        <li>Accumulate all events forever (never deleted)</li>
+        <li>Create filtered output feeds with custom rules</li>
+        <li>Filter by categories, regex patterns, and time overlap</li>
+        <li>Manually hide/show individual events</li>
+    </ul>
+</div>
+
+<div class="card">
+    <h3>Quick Start</h3>
+    <ol style="margin-left: 2rem; margin-top: 1rem;">
+        <li><a href="/sources/add">Add a source</a> - Subscribe to a remote iCal feed</li>
+        <li><a href="/outputs/add">Create an output</a> - Define a filtered feed</li>
+        <li><a href="/events">Manage events</a> - View and hide specific events</li>
+        <li><a href="/rules/add">Add auto-hide rules</a> - Automatically hide overlapping events</li>
+    </ol>
+</div>
+{% endblock %}
