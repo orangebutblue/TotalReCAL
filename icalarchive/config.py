@@ -82,10 +82,14 @@ class ConfigManager:
     
     def save(self, config: AppConfig) -> None:
         """Save configuration to TOML file."""
+        # Helper to remove None values from dict
+        def clean_dict(d):
+            return {k: v for k, v in d.items() if v is not None}
+        
         data = {
-            'sources': {name: asdict(src) for name, src in config.sources.items()},
-            'outputs': {name: asdict(out) for name, out in config.outputs.items()},
-            'rules': [asdict(rule) for rule in config.rules],
+            'sources': {name: clean_dict(asdict(src)) for name, src in config.sources.items()},
+            'outputs': {name: clean_dict(asdict(out)) for name, out in config.outputs.items()},
+            'rules': [clean_dict(asdict(rule)) for rule in config.rules],
             'calendar_port': config.calendar_port,
             'ui_port': config.ui_port,
         }
