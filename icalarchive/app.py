@@ -182,9 +182,11 @@ async def list_sources():
     return sources
 
 
+from fastapi import FastAPI, HTTPException, Request, Response, Form, BackgroundTasks
+
 @app.post("/api/sources")
-async def create_source(source: SourceCreate):
-    """Create a new source."""
+async def create_source(source: SourceCreate, background_tasks: BackgroundTasks):
+    """Create a new source and fetch immediately."""
     config = state.config_manager.load()
     
     if source.name in config.sources:
@@ -199,6 +201,9 @@ async def create_source(source: SourceCreate):
     
     # Schedule the source
     state.scheduler.schedule_source(source.name, source_config, fetch_source)
+    
+    # Trigger an immediate background fetch for instant UX
+    background_tasks.add_task(fetch_source, source.name)
     
     return {"status": "created", "name": source.name}
 
@@ -416,28 +421,10 @@ async def delete_rule(rule_id: str):
 
 
 # Web UI endpoints
-@app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    """Dashboard page."""
-    config = state.config_manager.load()
-    all_events = state.event_store.load_all_events()
-    
-    source_stats = []
-    for name in config.sources:
-        stats = state.event_store.get_source_stats(name)
-        source_stats.append({
-            'name': name,
-            'event_count': stats['event_count'],
-            'last_fetch': stats['last_fetch'],
-        })
-    
-    return templates.TemplateResponse("dashboard.html", {
-        "request": request,
-        "source_count": len(config.sources),
-        "output_count": len(config.outputs),
-        "total_events": len(all_events),
-        "sources": source_stats,
-    })
+@app.get("/")
+async def root():
+    """Redirect root directly to the Calendar view."""
+    return RedirectResponse(url="/calendar")
 
 
 @app.get("/events", response_class=HTMLResponse)
@@ -453,6 +440,50 @@ async def events_page(request: Request, page: int = 1, source: str = None):
         "pages": result['pages'],
         "sources": list(config.sources.keys()),
         "selected_source": source,
+    })
+
+
+@app.get("/api/calendar-events")
+async def get_calendar_events(source: Optional[str] = None):
+    """Feed for FullCalendar.js."""
+    all_events = state.event_store.load_all_events()
+    hidden_uids = state.hidden_manager.load()
+    
+    events_out = []
+    for uid, event in all_events.items():
+        if source and not uid.startswith(f"{source}::"):
+            continue
+            
+        start = event.get('DTSTART')
+        end = event.get('DTEND')
+        
+        # Format dates for FC
+        start_str = start.dt.isoformat() if start else ""
+        end_str = end.dt.isoformat() if end else ""
+            
+        hidden = uid in hidden_uids
+        
+        events_out.append({
+            'id': uid,
+            'title': str(event.get('SUMMARY', '')),
+            'start': start_str,
+            'end': end_str,
+            'color': '#dc3545' if hidden else '#0d6efd',
+            'extendedProps': {
+                'source': uid.split('::', 1)[0],
+                'hidden': hidden
+            }
+        })
+    return events_out
+
+
+@app.get("/calendar", response_class=HTMLResponse)
+async def calendar_page(request: Request):
+    """Calendar view page."""
+    config = state.config_manager.load()
+    return templates.TemplateResponse("calendar.html", {
+        "request": request,
+        "sources": list(config.sources.keys())
     })
 
 

@@ -1,0 +1,13 @@
+rules = []
+calendar_port = 8012
+ui_port = 8012
+
+[sources.dep_feed]
+url = "http://localhost:8011/cal/out1.ics"
+fetch_interval_minutes = 30
+enabled = true
+
+[outputs.out2]
+filter_by_category = []
+exclude_category = []
+include_sources = []

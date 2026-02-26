@@ -25,9 +25,15 @@ class Fetcher:
         """Fetch an iCal feed from a URL."""
         logger.info(f"Fetching {source_name} from {url}")
         
+        # Translate webcal:// schema to https:// for httpx
+        fetch_url = url
+        if fetch_url.startswith("webcal://"):
+            fetch_url = "https://" + fetch_url[9:]
+            logger.info(f"Translating webcal schema to {fetch_url}")
+        
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.get(url)
+                response = await client.get(fetch_url)
                 response.raise_for_status()
                 
                 content = response.content

@@ -12,31 +12,45 @@
     <div class="card-body">
         <form id="addOutputForm">
             <div class="mb-3">
-                <label for="outputName" class="form-label">Name</label>
+                <label for="outputName" class="form-label">Name <span class="text-danger">*</span></label>
                 <input type="text" class="form-control" id="outputName" required>
+                <small class="form-text text-muted">A valid filename without spaces (e.g. `work_merged`). Your feed will
+                    be available at `/cal/{name}.ics`</small>
             </div>
-            <div class="mb-3">
-                <label for="includeSources" class="form-label">Include Sources (comma-separated, leave empty for all)</label>
-                <input type="text" class="form-control" id="includeSources" placeholder="e.g., work,personal">
-                <small class="form-text text-muted">Available: {{ sources | join(', ') }}</small>
-            </div>
-            <div class="mb-3">
-                <label for="filterCategories" class="form-label">Filter by Categories (comma-separated)</label>
-                <input type="text" class="form-control" id="filterCategories" placeholder="e.g., Work,Meeting">
-            </div>
-            <div class="mb-3">
-                <label for="excludeCategories" class="form-label">Exclude Categories (comma-separated)</label>
-                <input type="text" class="form-control" id="excludeCategories" placeholder="e.g., Personal,Holiday">
-            </div>
-            <div class="mb-3">
-                <label for="includeSummaryRegex" class="form-label">Include Summary Regex</label>
-                <input type="text" class="form-control" id="includeSummaryRegex" placeholder="e.g., (meeting|standup)">
-            </div>
-            <div class="mb-3">
-                <label for="excludeSummaryRegex" class="form-label">Exclude Summary Regex</label>
-                <input type="text" class="form-control" id="excludeSummaryRegex" placeholder="e.g., cancelled">
-            </div>
-            <button type="submit" class="btn btn-primary">Add Output</button>
+
+            <details class="mb-3 border p-3 rounded bg-light">
+                <summary class="fw-bold cursor-pointer" style="cursor: pointer;">Show Advanced Filtering Options
+                </summary>
+                <div class="mt-3">
+                    <div class="mb-3">
+                        <label for="includeSources" class="form-label">Include Specific Sources
+                            (comma-separated)</label>
+                        <input type="text" class="form-control" id="includeSources" placeholder="e.g., work,personal">
+                        <small class="form-text text-muted">Leave empty to include all sources. Available: {{ sources |
+                            join(', ') }}</small>
+                    </div>
+                    <div class="mb-3">
+                        <label for="filterCategories" class="form-label">Must Have Categories (comma-separated)</label>
+                        <input type="text" class="form-control" id="filterCategories" placeholder="e.g., Work,Meeting">
+                    </div>
+                    <div class="mb-3">
+                        <label for="excludeCategories" class="form-label">Exclude Categories (comma-separated)</label>
+                        <input type="text" class="form-control" id="excludeCategories"
+                            placeholder="e.g., Personal,Holiday">
+                    </div>
+                    <div class="mb-3">
+                        <label for="includeSummaryRegex" class="form-label">Include Summary Regex</label>
+                        <input type="text" class="form-control" id="includeSummaryRegex"
+                            placeholder="e.g., (meeting|standup)">
+                    </div>
+                    <div class="mb-3">
+                        <label for="excludeSummaryRegex" class="form-label">Exclude Summary Regex</label>
+                        <input type="text" class="form-control" id="excludeSummaryRegex" placeholder="e.g., cancelled">
+                    </div>
+                </div>
+            </details>
+
+            <button type="submit" class="btn btn-primary">Add Output Feed</button>
         </form>
     </div>
 </div>
@@ -61,9 +75,17 @@
                 <tr>
                     <td><strong>{{ output.name }}</strong></td>
                     <td>
-                        <a href="/cal/{{ output.name }}.ics" target="_blank">
-                            /cal/{{ output.name }}.ics
-                        </a>
+                        <div>
+                            <a href="/cal/{{ output.name }}.ics" target="_blank">
+                                <i class="bi bi-file-earmark-break"></i> iCal Link
+                            </a>
+                        </div>
+                        <div>
+                            <script>
+                                document.write('<a href="webcal://' + window.location.host + '/cal/{{ output.name }}.ics">');
+                                document.write('Subscribe (Webcal)</a>');
+                            </script>
+                        </div>
                     </td>
                     <td>
                         <small>
@@ -82,13 +104,15 @@
                             {% if output.exclude_summary_regex %}
                             <div>Exclude regex: {{ output.exclude_summary_regex }}</div>
                             {% endif %}
-                            {% if not (output.include_sources or output.filter_by_category or output.exclude_category or output.include_summary_regex or output.exclude_summary_regex) %}
+                            {% if not (output.include_sources or output.filter_by_category or output.exclude_category or
+                            output.include_summary_regex or output.exclude_summary_regex) %}
                             <em class="text-muted">No filters (all events)</em>
                             {% endif %}
                         </small>
                     </td>
                     <td>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteOutput('{{ output.name }}')">Delete</button>
+                        <button class="btn btn-sm btn-outline-danger"
+                            onclick="deleteOutput('{{ output.name }}')">Delete</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -103,60 +127,60 @@
 
 {% block scripts %}
 <script>
-document.getElementById('addOutputForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const name = document.getElementById('outputName').value;
-    const includeSources = document.getElementById('includeSources').value
-        .split(',').map(s => s.trim()).filter(s => s);
-    const filterCategories = document.getElementById('filterCategories').value
-        .split(',').map(s => s.trim()).filter(s => s);
-    const excludeCategories = document.getElementById('excludeCategories').value
-        .split(',').map(s => s.trim()).filter(s => s);
-    const includeSummaryRegex = document.getElementById('includeSummaryRegex').value || null;
-    const excludeSummaryRegex = document.getElementById('excludeSummaryRegex').value || null;
-    
-    const data = {
-        name,
-        include_sources: includeSources,
-        filter_by_category: filterCategories,
-        exclude_category: excludeCategories,
-        include_summary_regex: includeSummaryRegex,
-        exclude_summary_regex: excludeSummaryRegex,
-    };
-    
-    try {
-        const response = await fetch('/api/outputs', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(data)
-        });
-        if (response.ok) {
-            location.reload();
-        } else {
-            const error = await response.json();
-            alert('Error: ' + (error.detail || 'Failed to add output'));
-        }
-    } catch (error) {
-        alert('Error: ' + error.message);
-    }
-});
+    document.getElementById('addOutputForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
 
-async function deleteOutput(name) {
-    if (!confirm(`Delete output ${name}?`)) return;
-    
-    try {
-        const response = await fetch(`/api/outputs/${encodeURIComponent(name)}`, {
-            method: 'DELETE'
-        });
-        if (response.ok) {
-            location.reload();
-        } else {
-            alert('Failed to delete output');
+        const name = document.getElementById('outputName').value;
+        const includeSources = document.getElementById('includeSources').value
+            .split(',').map(s => s.trim()).filter(s => s);
+        const filterCategories = document.getElementById('filterCategories').value
+            .split(',').map(s => s.trim()).filter(s => s);
+        const excludeCategories = document.getElementById('excludeCategories').value
+            .split(',').map(s => s.trim()).filter(s => s);
+        const includeSummaryRegex = document.getElementById('includeSummaryRegex').value || null;
+        const excludeSummaryRegex = document.getElementById('excludeSummaryRegex').value || null;
+
+        const data = {
+            name,
+            include_sources: includeSources,
+            filter_by_category: filterCategories,
+            exclude_category: excludeCategories,
+            include_summary_regex: includeSummaryRegex,
+            exclude_summary_regex: excludeSummaryRegex,
+        };
+
+        try {
+            const response = await fetch('/api/outputs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            if (response.ok) {
+                location.reload();
+            } else {
+                const error = await response.json();
+                alert('Error: ' + (error.detail || 'Failed to add output'));
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
         }
-    } catch (error) {
-        alert('Error: ' + error.message);
+    });
+
+    async function deleteOutput(name) {
+        if (!confirm(`Delete output ${name}?`)) return;
+
+        try {
+            const response = await fetch(`/api/outputs/${encodeURIComponent(name)}`, {
+                method: 'DELETE'
+            });
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Failed to delete output');
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
     }
-}
 </script>
 {% endblock %}

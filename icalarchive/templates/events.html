@@ -13,7 +13,7 @@
                 <select name="source" id="source" class="form-select">
                     <option value="">All Sources</option>
                     {% for src in sources %}
-                    <option value="{{ src }}" {% if selected_source == src %}selected{% endif %}>{{ src }}</option>
+                    <option value="{{ src }}" {% if selected_source==src %}selected{% endif %}>{{ src }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -26,9 +26,13 @@
 </div>
 
 <div class="card mt-3">
+    <div class="card-header bg-light">
+        <input type="text" id="instantSearch" class="form-control"
+            placeholder="Instant Search (filters summaries below instantly...)">
+    </div>
     <div class="card-body">
         {% if events %}
-        <table class="table table-hover">
+        <table class="table table-hover" id="eventsTable">
             <thead>
                 <tr>
                     <th>Source</th>
@@ -47,13 +51,13 @@
                     <td>{{ event.start }}</td>
                     <td>
                         {% if event.categories %}
-                            {% if event.categories is string %}
-                                <span class="badge bg-info">{{ event.categories }}</span>
-                            {% else %}
-                                {% for cat in event.categories %}
-                                <span class="badge bg-info">{{ cat }}</span>
-                                {% endfor %}
-                            {% endif %}
+                        {% if event.categories is string %}
+                        <span class="badge bg-info">{{ event.categories }}</span>
+                        {% else %}
+                        {% for cat in event.categories %}
+                        <span class="badge bg-info">{{ cat }}</span>
+                        {% endfor %}
+                        {% endif %}
                         {% endif %}
                     </td>
                     <td>
@@ -64,7 +68,8 @@
                         {% endif %}
                     </td>
                     <td>
-                        <button class="btn btn-sm btn-outline-primary" onclick="toggleHidden('{{ event.uid }}', {{ 'true' if event.hidden else 'false' }})">
+                        <button class="btn btn-sm btn-outline-primary"
+                            onclick="toggleHidden('{{ event.uid }}', {{ 'true' if event.hidden else 'false' }})">
                             {% if event.hidden %}Show{% else %}Hide{% endif %}
                         </button>
                     </td>
@@ -79,7 +84,8 @@
             <ul class="pagination">
                 {% for p in range(1, pages + 1) %}
                 <li class="page-item {% if p == page %}active{% endif %}">
-                    <a class="page-link" href="?page={{ p }}{% if selected_source %}&source={{ selected_source }}{% endif %}">{{ p }}</a>
+                    <a class="page-link"
+                        href="?page={{ p }}{% if selected_source %}&source={{ selected_source }}{% endif %}">{{ p }}</a>
                 </li>
                 {% endfor %}
             </ul>
@@ -94,20 +100,39 @@
 
 {% block scripts %}
 <script>
-async function toggleHidden(uid, isHidden) {
-    const action = isHidden ? 'show' : 'hide';
-    try {
-        const response = await fetch(`/api/events/${encodeURIComponent(uid)}/${action}`, {
-            method: 'POST'
-        });
-        if (response.ok) {
-            location.reload();
-        } else {
-            alert('Failed to update event');
+    async function toggleHidden(uid, isHidden) {
+        const action = isHidden ? 'show' : 'hide';
+        try {
+            const response = await fetch(`/api/events/${encodeURIComponent(uid)}/${action}`, {
+                method: 'POST'
+            });
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Failed to update event');
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
         }
-    } catch (error) {
-        alert('Error: ' + error.message);
     }
-}
+
+    // Client-side Instant Search
+    document.getElementById('instantSearch')?.addEventListener('input', function (e) {
+        const term = e.target.value.toLowerCase();
+        const rows = document.querySelectorAll('#eventsTable tbody tr');
+
+        rows.forEach(row => {
+            // Summary is the 2nd column (index 1)
+            const summaryCell = row.cells[1];
+            if (summaryCell) {
+                const text = summaryCell.textContent.toLowerCase();
+                if (text.includes(term)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            }
+        });
+    });
 </script>
 {% endblock %}

@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+
+{% block title %}Calendar View - ICalArchive{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <h1>Calendar View</h1>
+    </div>
+    <div class="col-md-4 text-end">
+        <select id="sourceFilter" class="form-select" onchange="refreshCalendar()">
+            <option value="">All Sources</option>
+            {% for src in sources %}
+            <option value="{{ src }}">{{ src }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-md-2 text-end">
+        <button class="btn btn-outline-secondary btn-sm" onclick="refreshCalendar()">Refresh</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div id="calendar"></div>
+    </div>
+</div>
+
+<!-- Event Action Modal -->
+<div class="modal fade" id="eventModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="eventModalTitle">Event Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p><strong>Source:</strong> <span id="eventSource"></span></p>
+                <p><strong>Starts:</strong> <span id="eventStart"></span></p>
+                <p><strong>Status:</strong> <span id="eventStatus" class="badge"></span></p>
+                <hr>
+                <p class="text-muted small">Hiding an event acts equivalent to deleting it from your output feeds,
+                    preventing it from ever appearing even if the upstream calendar re-broadcasts it.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" id="toggleHideBtn" class="btn"></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+<script>
+    let calendar;
+    let selectedEventUid = null;
+    let selectedEventIsHidden = false;
+    const eventModal = new bootstrap.Modal(document.getElementById('eventModal'));
+
+    document.addEventListener('DOMContentLoaded', function () {
+        var calendarEl = document.getElementById('calendar');
+        calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'dayGridMonth',
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            height: 700,
+            events: function (fetchInfo, successCallback, failureCallback) {
+                const source = document.getElementById('sourceFilter').value;
+                const url = source ? `/api/calendar-events?source=${encodeURIComponent(source)}` : '/api/calendar-events';
+
+                fetch(url)
+                    .then(r => r.json())
+                    .then(data => successCallback(data))
+                    .catch(e => failureCallback(e));
+            },
+            eventClick: function (info) {
+                const props = info.event.extendedProps;
+                selectedEventUid = info.event.id;
+                selectedEventIsHidden = props.hidden;
+
+                document.getElementById('eventModalTitle').textContent = info.event.title || 'Untitled Event';
+                document.getElementById('eventSource').textContent = props.source;
+                document.getElementById('eventStart').textContent = info.event.start.toLocaleString();
+
+                const statusBadge = document.getElementById('eventStatus');
+                const toggleBtn = document.getElementById('toggleHideBtn');
+
+                if (selectedEventIsHidden) {
+                    statusBadge.textContent = 'Hidden (Ignored by Outputs)';
+                    statusBadge.className = 'badge bg-danger';
+                    toggleBtn.textContent = 'Unhide Event';
+                    toggleBtn.className = 'btn btn-success';
+                } else {
+                    statusBadge.textContent = 'Visible';
+                    statusBadge.className = 'badge bg-success';
+                    toggleBtn.textContent = 'Hide (Delete from Outputs)';
+                    toggleBtn.className = 'btn btn-danger';
+                }
+
+                eventModal.show();
+            }
+        });
+        calendar.render();
+
+        document.getElementById('toggleHideBtn').addEventListener('click', async () => {
+            if (!selectedEventUid) return;
+            const action = selectedEventIsHidden ? 'show' : 'hide';
+            try {
+                const response = await fetch(`/api/events/${encodeURIComponent(selectedEventUid)}/${action}`, {
+                    method: 'POST'
+                });
+                if (response.ok) {
+                    eventModal.hide();
+                    calendar.refetchEvents();
+                } else {
+                    alert('Failed to update event status');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        });
+    });
+
+    function refreshCalendar() {
+        if (calendar) {
+            calendar.refetchEvents();
+        }
+    }
+</script>
+{% endblock %}
