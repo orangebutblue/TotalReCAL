@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - ICalArchive{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card stat-card">
+            <div class="stat-number">{{ source_count }}</div>
+            <div class="stat-label">Sources</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card">
+            <div class="stat-number">{{ output_count }}</div>
+            <div class="stat-label">Outputs</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card">
+            <div class="stat-number">{{ total_events }}</div>
+            <div class="stat-label">Total Events</div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>Sources</h5>
+            </div>
+            <div class="card-body">
+                {% if sources %}
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Event Count</th>
+                            <th>Last Fetch</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for source in sources %}
+                        <tr>
+                            <td>{{ source.name }}</td>
+                            <td>{{ source.event_count }}</td>
+                            <td>
+                                {% if source.last_fetch %}
+                                    {{ source.last_fetch.strftime('%Y-%m-%d %H:%M:%S') }}
+                                {% else %}
+                                    Never
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="text-muted">No sources configured yet. <a href="/sources">Add a source</a>.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
