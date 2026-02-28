@@ -605,11 +605,14 @@ async def outputs_page(request: Request):
 @app.get("/rules", response_class=HTMLResponse)
 async def rules_page(request: Request):
     """Rules page."""
-    rules = await list_rules()
+    all_rules = await list_rules()
+    
+    # Filter out Series rules so they only appear in their dedicated workspace
+    hide_rules = [r for r in all_rules if r.get('rule_type') != 'add_to_series']
     
     return templates.TemplateResponse("rules.html", {
         "request": request,
-        "rules": rules,
+        "rules": hide_rules,
         "series_data": state.series_manager.get_all_series()
     })
 
@@ -632,6 +635,14 @@ async def create_series_api(series: SeriesCreate):
 @app.delete("/api/series/{series_id}")
 async def delete_series_api(series_id: str):
     if state.series_manager.delete_series(series_id):
+        # Cascade delete any auto-assign rules bound to this series
+        config = state.config_manager.load()
+        original_count = len(config.rules)
+        config.rules = [r for r in config.rules if not (r.rule_type == 'add_to_series' and r.params.get('series_id') == series_id)]
+        
+        if len(config.rules) != original_count:
+            state.config_manager.save(config)
+            
         return {"status": "deleted"}
     raise HTTPException(status_code=404, detail="Series not found")
 
@@ -731,8 +742,14 @@ async def create_series_rule(series_id: str, payload: dict):
         raise HTTPException(status_code=400, detail="Missing regex pattern")
         
     import uuid
-    rule_id = str(uuid.uuid4())
     config = state.config_manager.load()
+    
+    # Prevent duplicate rules targeting the same series with the exact same pattern
+    for rule in config.rules:
+        if rule.rule_type == 'add_to_series' and rule.params.get('series_id') == series_id and rule.params.get('pattern') == pattern:
+            raise HTTPException(status_code=400, detail="An identical auto-add rule already exists for this series.")
+            
+    rule_id = str(uuid.uuid4())
     
     new_rule = RuleConfig(
         rule_id=rule_id,
