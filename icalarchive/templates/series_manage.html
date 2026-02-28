@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Series - ICalArchive{% endblock %}
+
+{% block content %}
+<div class="row align-items-center mb-4">
+    <div class="col-md-6">
+        <h1>Series Management</h1>
+    </div>
+    <div class="col-md-6 text-end">
+        <a href="/series" class="btn btn-outline-primary"><i class="bi bi-arrow-left"></i> Back to Timelines</a>
+    </div>
+</div>
+
+<div class="row" id="seriesContainer">
+    <!-- Rendered by JS -->
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const seriesMap = {{ series_data | tojson | safe }};
+    const eventsMap = {{ events | tojson | safe }};
+
+    function renderManagementUI() {
+        const container = document.getElementById('seriesContainer');
+        container.innerHTML = '';
+
+        const entries = Object.entries(seriesMap);
+        if (entries.length === 0) {
+            container.innerHTML = '<div class="col-12"><p class="text-muted">No custom series have been created yet. You can create them from the Calendar or Events list!</p></div>';
+            return;
+        }
+
+        entries.forEach(([sId, sData]) => {
+            const col = document.createElement('div');
+            col.className = 'col-md-6 mb-4';
+
+            // Build Events List
+            let eventsHtml = '';
+            if (sData.event_uids.length === 0) {
+                eventsHtml = '<p class="text-muted small mb-0 p-2">No events bound to this series.</p>';
+            } else {
+                eventsHtml = '<ul class="list-group list-group-flush">';
+
+                // Map to real data and sort chronologically
+                const boundEvents = sData.event_uids
+                    .filter(uid => eventsMap[uid])
+                    .map(uid => eventsMap[uid])
+                    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+
+                boundEvents.forEach(ev => {
+                    eventsHtml += `
+                        <li class="list-group-item d-flex justify-content-between align-items-center p-2">
+                            <div class="text-truncate me-2" style="max-width: 80%;">
+                                <strong>${ev.title}</strong><br>
+                                <small class="text-muted">${ev.start ? new Date(ev.start).toLocaleString() : 'Unknown Date'}</small>
+                            </div>
+                            <button class="btn btn-sm btn-outline-danger" onclick="removeEvent('${sId}', '${ev.uid}')" title="Remove from Series">
+                                Remove
+                            </button>
+                        </li>
+                    `;
+                });
+                eventsHtml += '</ul>';
+
+                // Catch orphaned UIDs
+                const orphans = sData.event_uids.length - boundEvents.length;
+                if (orphans > 0) {
+                    eventsHtml += `<div class="p-2 text-warning small"><i class="bi bi-exclamation-triangle"></i> Includes ${orphans} missing upstream references (hidden/deleted).</div>`;
+                }
+            }
+
+            col.innerHTML = `
+                <div class="card shadow-sm h-100 border-0">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0 fw-bold">${sData.name}</h5>
+                        <button class="btn btn-sm btn-danger" onclick="deleteSeries('${sId}', '${sData.name.replace(/'/g, "\\'")}')">Delete Series</button>
+                    </div>
+                    <div class="card-body p-0" style="max-height: 400px; overflow-y: auto;">
+                        ${eventsHtml}
+                    </div>
+                </div>
+            `;
+            container.appendChild(col);
+        });
+    }
+
+    async function removeEvent(seriesId, uid) {
+        if (!confirm('Unbind this event from the series?')) return;
+        try {
+            const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/events/${encodeURIComponent(uid)}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) location.reload();
+            else alert('Failed to remove event.');
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    async function deleteSeries(seriesId, name) {
+        if (!confirm(`Are you sure you want to completely delete the "${name}" series? This will NOT delete the underlying calendar events.`)) return;
+        try {
+            const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}`, {
+                method: 'DELETE'
+            });
+            if (res.ok) location.reload();
+            else alert('Failed to delete series.');
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', renderManagementUI);
+</script>
+{% endblock %}

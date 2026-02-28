@@ -1,0 +1,496 @@
+{% extends "base.html" %}
+
+{% block title %}Series - ICalArchive{% endblock %}
+
+{% block content %}
+<div class="row align-items-center mb-4">
+    <div class="col-md-2">
+        <h1>Series</h1>
+    </div>
+    <div class="col-md-10 text-end">
+        <div class="d-inline-flex align-items-center me-3 p-1 border rounded bg-light shadow-sm">
+            <span class="badge bg-secondary me-2"><i class="bi bi-zoom-in"></i> Calendar Zoom</span>
+            <select id="calendarZoom" class="form-select form-select-sm border-0 bg-transparent fw-bold"
+                style="width: 140px; box-shadow: none;" onchange="renderMatrix()">
+                <option value="fit">Fit to Window</option>
+                <option value="hour">1 Hour Scale</option>
+                <option value="day">1 Day Scale</option>
+                <option value="week">1 Week Scale</option>
+                <option value="month" selected>1 Month Scale</option>
+            </select>
+        </div>
+
+        <div class="btn-group me-2 shadow-sm">
+            <input type="radio" class="btn-check" name="trackMode" id="trackSingle" value="single" checked
+                onchange="renderMatrix()">
+            <label class="btn btn-outline-primary" for="trackSingle"><i class="bi bi-distribute-vertical"></i> Single
+                Track</label>
+            <input type="radio" class="btn-check" name="trackMode" id="trackMulti" value="multi"
+                onchange="renderMatrix()">
+            <label class="btn btn-outline-primary" for="trackMulti"><i class="bi bi-distribute-horizontal"></i> Multi
+                Track</label>
+        </div>
+
+        <div class="btn-group me-2 shadow-sm">
+            <input type="radio" class="btn-check" name="scaleMode" id="scaleAgenda" value="agenda" checked
+                onchange="renderMatrix()">
+            <label class="btn btn-outline-success" for="scaleAgenda"><i class="bi bi-list-nested"></i> Agenda
+                Scale</label>
+            <input type="radio" class="btn-check" name="scaleMode" id="scaleCalendar" value="calendar"
+                onchange="renderMatrix()">
+            <label class="btn btn-outline-success" for="scaleCalendar"><i class="bi bi-calendar3"></i> Calendar
+                Scale</label>
+        </div>
+
+        <div class="btn-group shadow-sm">
+            <input type="radio" class="btn-check" name="orientation" id="orientHoriz" value="horizontal" checked
+                onchange="renderMatrix()">
+            <label class="btn btn-outline-secondary" for="orientHoriz"><i class="bi bi-arrow-right"></i>
+                Horizontal</label>
+            <input type="radio" class="btn-check" name="orientation" id="orientVert" value="vertical"
+                onchange="renderMatrix()">
+            <label class="btn btn-outline-secondary" for="orientVert"><i class="bi bi-arrow-down"></i> Vertical</label>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0 mb-5">
+    <div class="card-body bg-light" id="timelineContainer"
+        style="min-height: 50vh; overflow: auto; position: relative; padding: 2rem;">
+        <!-- Javascript renders timeline payload here -->
+    </div>
+</div>
+
+<hr class="my-5">
+
+<div class="row align-items-center mb-4">
+    <div class="col-md-8">
+        <h2 class="fw-bold"><i class="bi bi-folder-fill text-primary me-2"></i> Custom Series Workspaces</h2>
+        <p class="text-muted">Click any series below to open its dedicated workspace. From there you can build rules to
+            auto-add events or unbind them manually.</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <button class="btn btn-primary shadow-sm fw-bold" data-bs-toggle="modal" data-bs-target="#createSeriesModal">
+            <i class="bi bi-plus-lg me-1"></i> Create New Series
+        </button>
+    </div>
+</div>
+
+<!-- Create Series Modal -->
+<div class="modal fade" id="createSeriesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title"><i class="bi bi-folder-plus me-2"></i>Create New Series</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Series Name</label>
+                    <input type="text" class="form-control border-2" id="newSeriesInput"
+                        placeholder="e.g. 'Project Alpha', 'Dentist Appointments'...">
+                    <div class="form-text">You can bind actual calendar events to this series later using textual
+                        matching rules.</div>
+                </div>
+            </div>
+            <div class="modal-footer bg-light">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary fw-bold" onclick="createNewSeries()">Create Series</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row" id="seriesWorkspaceCards">
+    {% for s_id, s_data in series_data.items() %}
+    <div class="col-md-3 mb-4">
+        <div class="card shadow border-0 h-100 series-card" style="cursor: pointer; transition: transform 0.2s;"
+            onclick="window.location.href='/series/{{ s_id }}'">
+            <div class="card-body text-center p-4">
+                <div class="display-4 text-primary mb-3"><i class="bi bi-collection-play"></i></div>
+                <h5 class="fw-bold">{{ s_data.name }}</h5>
+                <span class="badge bg-light text-dark border">{{ s_data.event_uids|length }} Assigned Events</span>
+                <div class="mt-3">
+                    <button class="btn btn-sm btn-outline-primary w-100">Open Workspace <i
+                            class="bi bi-arrow-right"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+    {% if not series_data %}
+    <div class="col-12 text-center text-muted p-5 bg-light rounded border border-dashed">
+        <i class="bi bi-info-circle fs-2"></i>
+        <p class="mt-2 mb-0">No custom series have been created yet. You can group specific events into Series from the
+            dashboard or Events list view.</p>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+    .series-card:hover {
+        transform: translateY(-3px) scale(1.02);
+    }
+</style>
+<script>
+    const seriesMap = {{ series_data | tojson | safe }};
+    const eventsMap = {{ events | tojson | safe }};
+    const colors = ['#0d6efd', '#198754', '#dc3545', '#ffc107', '#0dcaf0', '#6f42c1', '#d63384', '#fd7e14'];
+
+    /* ----------------------------------------------------
+       DATA PROCESSING
+       ---------------------------------------------------- */
+    function parseItems() {
+        let items = [];
+        let colorIdx = 0;
+
+        for (const [sId, sData] of Object.entries(seriesMap)) {
+            const seriesColor = colors[colorIdx % colors.length];
+            colorIdx++;
+
+            for (const uid of sData.event_uids) {
+                if (eventsMap[uid]) {
+                    const ev = eventsMap[uid];
+                    let t = new Date(ev.start).getTime();
+                    if (isNaN(t)) t = 0;
+
+                    items.push({
+                        uid: ev.uid,
+                        title: ev.title,
+                        time: t,
+                        dateStr: ev.start ? new Date(ev.start).toLocaleString() : 'Unknown Date',
+                        seriesId: sId,
+                        seriesName: sData.name,
+                        color: seriesColor
+                    });
+                }
+            }
+        }
+        items.sort((a, b) => a.time - b.time);
+        return items;
+    }
+
+    /* ----------------------------------------------------
+       TIMELINE RENDERING ENGINE
+       ---------------------------------------------------- */
+    function getZoomPixelsPerMs(zoom) {
+        if (zoom === 'hour') return 300 / (1000 * 60 * 60);
+        if (zoom === 'day') return 300 / (1000 * 60 * 60 * 24);
+        if (zoom === 'week') return 300 / (1000 * 60 * 60 * 24 * 7);
+        if (zoom === 'month') return 300 / (1000 * 60 * 60 * 24 * 30);
+        return null; // fit
+    }
+
+    function renderMatrix() {
+        const container = document.getElementById('timelineContainer');
+        container.innerHTML = '';
+
+        const modeTrack = document.querySelector('input[name="trackMode"]:checked').value;
+        const modeScale = document.querySelector('input[name="scaleMode"]:checked').value;
+        const modeOrient = document.querySelector('input[name="orientation"]:checked').value;
+        const zoomMode = document.getElementById('calendarZoom').value;
+
+        const items = parseItems();
+        if (items.length === 0) {
+            container.innerHTML = '<div class="text-center pt-5 pb-5"><i class="bi bi-inbox fs-1 text-muted"></i><p class="text-muted mt-3">No events found in any series.</p></div>';
+            return;
+        }
+
+        const minTime = items[0].time;
+        const maxTime = items[items.length - 1].time;
+
+        let duration = maxTime - minTime;
+        if (duration === 0) duration = 1000 * 60 * 60 * 24; // 1 day padding
+
+        const pxPerMs = modeScale === 'calendar' ? getZoomPixelsPerMs(zoomMode) : null;
+
+        // Calculate the absolute track boundaries based on zoom factor
+        let trackPixels = 0;
+        if (pxPerMs !== null) {
+            // Give 500px padding at the end so the last item isn't clipped
+            trackPixels = Math.max(container.clientWidth || 800, (duration * pxPerMs) + 500);
+        }
+
+        // Shared array across all tracks to track packed rectangles for true collision avoidance in Calendar Model
+        const placedRects = [];
+
+        const createTrackCol = (titleText, trackId) => {
+            const wrap = document.createElement('div');
+            wrap.className = 'w-100 mb-4';
+
+            if (titleText) {
+                const title = document.createElement('h6');
+                title.className = 'fw-bold text-muted mb-3 text-uppercase badge bg-white border text-dark p-2 w-100 text-start';
+                title.textContent = titleText;
+                wrap.appendChild(title);
+            }
+
+            const track = document.createElement('div');
+
+            if (modeScale === 'agenda') {
+                track.style.display = 'flex';
+                track.style.gap = '15px';
+                track.style.flexDirection = modeOrient === 'horizontal' ? 'row' : 'column';
+                if (modeOrient === 'horizontal') track.style.overflowX = 'auto';
+            } else {
+                // Calendar scale - requires absolute boundaries for rendering
+                track.style.position = 'relative';
+                if (modeOrient === 'horizontal') {
+                    track.style.height = '120px'; // Initial height, expands if collisions happen
+                    track.style.width = pxPerMs ? trackPixels + 'px' : '100%';
+                    track.style.borderBottom = '1px solid #dee2e6';
+                } else {
+                    track.style.width = '250px';
+                    track.style.minHeight = pxPerMs ? trackPixels + 'px' : '600px';
+                    track.style.borderRight = '1px solid #dee2e6';
+                }
+            }
+            track.dataset.trackId = trackId;
+            wrap.appendChild(track);
+            return [wrap, track];
+        };
+
+        const createCard = (item, trackDomElement) => {
+            const card = document.createElement('div');
+            card.className = 'card shadow-sm border-0';
+            card.style.borderLeft = `4px solid ${item.color} !important`;
+            card.style.minWidth = modeOrient === 'horizontal' ? '200px' : 'auto';
+            card.style.maxWidth = '250px';
+            card.style.zIndex = '5';
+
+            card.innerHTML = `
+                <div class="card-body p-2 bg-white rounded">
+                    <span class="badge text-white mb-1" style="background-color: ${item.color}">${item.seriesName}</span>
+                    <strong class="d-block text-truncate text-dark" title="${item.title}">${item.title}</strong>
+                    <small class="text-muted" style="font-size: 0.75rem;">${item.dateStr}</small>
+                </div>
+            `;
+
+            if (modeScale === 'calendar') {
+                card.style.position = 'absolute';
+
+                // Calculate absolute or relative offset
+                let offsetVal;
+                if (pxPerMs !== null) offsetVal = (item.time - minTime) * pxPerMs;
+                else offsetVal = ((item.time - minTime) / duration) * 90; // clamp to 90%
+
+                const trackId = trackDomElement.dataset.trackId;
+
+                // Collision Packing Algorithm
+                if (modeOrient === 'horizontal') {
+                    card.style.left = pxPerMs !== null ? offsetVal + 'px' : offsetVal + '%';
+
+                    let actLeft = pxPerMs !== null ? offsetVal : (offsetVal / 100) * 1000; // heuristic for %
+                    let curTop = 10;
+
+                    while (true) {
+                        let collision = false;
+                        for (let rect of placedRects) {
+                            if (rect.trackId === trackId) {
+                                const hOverlap = Math.abs(actLeft - rect.left) < 220; // assumed card width 200 + gap
+                                const vOverlap = Math.abs(curTop - rect.top) < 80;    // assumed card height 70 + gap
+                                if (hOverlap && vOverlap) { collision = true; break; }
+                            }
+                        }
+                        if (collision) curTop += 85; else break;
+                    }
+
+                    card.style.top = curTop + 'px';
+                    // Expand horizontal track visually if vertical packing pushes it out of bounds
+                    if (curTop + 90 > parseInt(trackDomElement.style.height || 0)) {
+                        trackDomElement.style.height = (curTop + 110) + 'px';
+                    }
+
+                    placedRects.push({ trackId: trackId, left: actLeft, top: curTop });
+                } else {
+                    card.style.top = pxPerMs !== null ? offsetVal + 'px' : offsetVal + '%';
+
+                    let actTop = pxPerMs !== null ? offsetVal : (offsetVal / 100) * 1000;
+                    let curLeft = 10;
+
+                    while (true) {
+                        let collision = false;
+                        for (let rect of placedRects) {
+                            if (rect.trackId === trackId) {
+                                const vOverlap = Math.abs(actTop - rect.top) < 80;
+                                const hOverlap = Math.abs(curLeft - rect.left) < 220;
+                                if (hOverlap && vOverlap) { collision = true; break; }
+                            }
+                        }
+                        if (collision) curLeft += 230; else break;
+                    }
+
+                    card.style.left = curLeft + 'px';
+                    // Expand vertical track width if horizontal packing pushes it out
+                    if (curLeft + 250 > parseInt(trackDomElement.style.width || 0)) {
+                        trackDomElement.style.width = (curLeft + 270) + 'px';
+                    }
+
+                    placedRects.push({ trackId: trackId, left: curLeft, top: actTop });
+                }
+            }
+            return card;
+        };
+
+        const createAxisTrack = () => {
+            const axisWrap = document.createElement('div');
+            axisWrap.className = 'mb-4 bg-white border border-secondary rounded shadow-sm';
+
+            const track = document.createElement('div');
+            track.style.position = 'relative';
+
+            if (modeOrient === 'horizontal') {
+                track.style.width = pxPerMs ? trackPixels + 'px' : '100%';
+                track.style.height = '40px';
+            } else {
+                track.style.height = pxPerMs ? trackPixels + 'px' : '600px';
+                track.style.width = '120px';
+                track.style.minWidth = '120px';
+                axisWrap.style.marginRight = '20px';
+            }
+
+            // Synthesize responsive scale ticks
+            let tickMs;
+            if (zoomMode === 'fit') {
+                tickMs = duration / 4;
+            } else if (zoomMode === 'hour') {
+                tickMs = 1000 * 60 * 60;
+            } else if (zoomMode === 'day') {
+                tickMs = 1000 * 60 * 60 * 24;
+            } else if (zoomMode === 'week') {
+                tickMs = 1000 * 60 * 60 * 24 * 7;
+            } else if (zoomMode === 'month') {
+                tickMs = 1000 * 60 * 60 * 24 * 30;
+            }
+            if (tickMs <= 0) tickMs = 1000;
+
+            const numTicks = Math.floor(duration / tickMs) + 1;
+
+            for (let i = 0; i <= numTicks; i++) {
+                const targetTime = minTime + (i * tickMs);
+                const pct = (i * tickMs) / duration;
+
+                let offsetPx = 0;
+                if (pxPerMs !== null) {
+                    offsetPx = i * tickMs * pxPerMs;
+                    // Dont draw ticks far past the hard bounding box if calculated dynamically
+                    if (offsetPx > trackPixels - 50) break;
+                }
+
+                const d = new Date(targetTime);
+                let timeString = '';
+                if (zoomMode === 'hour') {
+                    timeString = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                } else if (zoomMode === 'day') {
+                    timeString = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                } else {
+                    timeString = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                }
+
+                const marker = document.createElement('div');
+                marker.style.position = 'absolute';
+                marker.className = 'badge bg-dark px-2 py-1';
+                marker.style.zIndex = '10';
+                marker.textContent = timeString;
+
+                if (modeOrient === 'horizontal') {
+                    marker.style.left = pxPerMs ? offsetPx + 'px' : pct * 90 + '%';
+                    marker.style.top = '10px';
+                    marker.style.transform = 'translateX(-50%)';
+
+                    const line = document.createElement('div');
+                    line.style.position = 'absolute';
+                    line.style.left = pxPerMs ? offsetPx + 'px' : pct * 90 + '%';
+                    line.style.top = '10px';
+                    line.style.height = '3000px';
+                    line.style.borderLeft = '1px solid #dee2e6';
+                    line.style.zIndex = '0';
+                    track.appendChild(line);
+
+                } else {
+                    marker.style.top = pxPerMs ? offsetPx + 'px' : pct * 90 + '%';
+                    marker.style.left = '10px';
+                    marker.style.transform = 'translateY(-50%)';
+
+                    const line = document.createElement('div');
+                    line.style.position = 'absolute';
+                    line.style.top = pxPerMs ? offsetPx + 'px' : pct * 90 + '%';
+                    line.style.left = '10px';
+                    line.style.width = '3000px';
+                    line.style.borderTop = '1px solid #dee2e6';
+                    line.style.zIndex = '0';
+                    track.appendChild(line);
+                }
+                track.appendChild(marker);
+            }
+
+            axisWrap.appendChild(track);
+            return axisWrap;
+        };
+
+        // Render Top-Level DOM Matrix
+        if (modeTrack === 'single') {
+            container.style.display = 'flex';
+            container.style.flexDirection = modeOrient === 'horizontal' ? 'column' : 'row';
+
+            if (modeScale === 'calendar') container.appendChild(createAxisTrack());
+
+            const [wrap, track] = createTrackCol('Superimposed Master Timeline', 'track_single');
+            items.forEach(item => track.appendChild(createCard(item, track)));
+            container.appendChild(wrap);
+
+        } else {
+            container.style.display = 'flex';
+            container.style.gap = '30px';
+            container.style.flexDirection = modeOrient === 'horizontal' ? 'column' : 'row';
+            if (modeOrient === 'vertical') container.style.overflowX = 'auto';
+
+            if (modeScale === 'calendar') container.appendChild(createAxisTrack());
+
+            let trackIdx = 0;
+            for (const [sId, sData] of Object.entries(seriesMap)) {
+                if (sData.event_uids.length === 0) continue;
+
+                const tid = 'track_multi_' + trackIdx;
+                trackIdx++;
+
+                const [wrap, track] = createTrackCol(sData.name, tid);
+                items.filter(i => i.seriesId === sId).forEach(item => {
+                    track.appendChild(createCard(item, track));
+                });
+                container.appendChild(wrap);
+            }
+        }
+    }
+
+    // Master Boot
+    document.addEventListener('DOMContentLoaded', () => {
+        renderMatrix();
+    });
+
+    // Create New Series
+    async function createNewSeries() {
+        const nameInput = document.getElementById('newSeriesInput').value.trim();
+        if (!nameInput) return alert('Please enter a name for the new series.');
+
+        try {
+            const createRes = await fetch(`/api/series`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: nameInput })
+            });
+
+            if (createRes.ok) {
+                location.reload();
+            } else {
+                const err = await createRes.json();
+                alert('Failed to create series: ' + (err.detail || 'Unknown error'));
+            }
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+</script>
+{% endblock %}

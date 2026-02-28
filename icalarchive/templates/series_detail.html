@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Series - {{ series.get('name', 'Unknown') }} - ICalArchive{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/series">Series</a></li>
+        <li class="breadcrumb-item active" aria-current="page">{{ series.get('name', 'Unknown') }}</li>
+    </ol>
+</nav>
+
+<div class="row mb-4 mt-2">
+    <div class="col-md-8">
+        <h2 class="fw-bold"><i class="bi bi-folder-fill text-primary me-2"></i> {{ series.get('name', 'Unknown') }}</h2>
+        <p class="text-muted">Manage the underlying events mapped to this Series, and define automated matching rules.
+        </p>
+    </div>
+    <div class="col-md-4 text-end">
+        <button class="btn btn-outline-danger shadow-sm"
+            onclick="deleteSeries('{{ series_id }}', '{{ series.name | default('') | escape }}')"><i
+                class="bi bi-trash me-1"></i>
+            Delete Entire Series</button>
+    </div>
+</div>
+
+<div class="row align-items-start">
+    <div class="col-md-6">
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-magic me-2"></i> Auto-Add Events by Title</h5>
+                <span class="badge bg-secondary">Evaluates both Past & Future</span>
+            </div>
+            <div class="card-body bg-light">
+                <p class="text-muted small">Define a text pattern. Any past or future event whose Title matches this
+                    pattern will be automatically bound into this Series.</p>
+
+                <form id="addSeriesRuleForm" class="row align-items-end g-3">
+                    <input type="hidden" id="targetSeries" value="{{ series_id }}">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold text-muted small text-uppercase">Match Type</label>
+                        <select class="form-select border-2" id="seriesMatchType">
+                            <option value="contains" selected>Contains</option>
+                            <option value="exact">Exact Match</option>
+                            <option value="starts">Starts With</option>
+                            <option value="ends">Ends With</option>
+                            <option value="regex">Custom Regex</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold text-muted small text-uppercase">Summary Text Pattern</label>
+                        <input type="text" class="form-control border-2" id="seriesPattern"
+                            placeholder="e.g. 'Dentist' or 'Flight'..." required>
+                    </div>
+                    <div class="col-md-12 mt-3">
+                        <button type="submit" class="btn btn-success fw-bold w-100 shadow-sm"><i
+                                class="bi bi-lightning-charge me-1"></i>
+                            Add Rule & Bind Matches</button>
+                    </div>
+                </form>
+
+                {% if rules %}
+                <div class="mt-4 pt-3 border-top">
+                    <h6 class="fw-bold mb-3 text-muted">Active Auto-Add Rules</h6>
+                    <ul class="list-group list-group-flush border rounded bg-white">
+                        {% for rule in rules %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center p-2">
+                            <code class="bg-light px-2 py-1 rounded text-dark border">{{ rule.params.pattern }}</code>
+                            <button class="btn btn-sm btn-outline-danger border-0"
+                                onclick="deleteRule('{{ rule.rule_id }}')"><i class="bi bi-trash"></i></button>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center p-3">
+                <h5 class="mb-0 fw-bold text-primary"><i class="bi bi-list-check me-2"></i> Bound Events</h5>
+                <span class="badge bg-light text-dark border">{{ events|length }} Total</span>
+            </div>
+            <div class="card-body p-0 bg-white shadow-inner" style="max-height: 500px; overflow-y: auto;">
+                {% if events %}
+                <ul class="list-group list-group-flush">
+                    {% for ev in events %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center p-3 border-bottom-0">
+                        <div class="text-truncate me-3" style="max-width: 80%;">
+                            <strong class="text-dark">{{ ev.title }}</strong><br>
+                            <small class="text-secondary"><i class="bi bi-calendar-event me-1"></i> {{ ev.start
+                                }}</small>
+                        </div>
+                        <button class="btn btn-sm btn-light text-danger border shadow-sm"
+                            onclick="removeEvent('{{ series_id }}', '{{ ev.uid }}')" title="Unbind from Series">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <div class="p-5 text-center text-muted bg-light">
+                    <i class="bi bi-unlink fs-1 mb-3 d-block"></i>
+                    <p>No events are bound to this series yet.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function removeEvent(seriesId, uid) {
+        if (!confirm('Unbind this event from the series?')) return;
+        try {
+            const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/events/${encodeURIComponent(uid)}`, { method: 'DELETE' });
+            if (res.ok) location.reload();
+            else alert('Failed to remove event.');
+        } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    async function deleteSeries(seriesId, name) {
+        if (!confirm(`Are you sure you want to completely delete the "${name}" series? This will NOT delete the underlying calendar events.`)) return;
+        try {
+            const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}`, { method: 'DELETE' });
+            if (res.ok) window.location.href = '/series';
+            else alert('Failed to delete series.');
+        } catch (e) { alert('Error: ' + e.message); }
+    }
+
+    function buildRegex(matchType, text) {
+        if (matchType === 'regex') return text;
+        const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (matchType === 'exact') return `^${escaped}$`;
+        if (matchType === 'starts') return `^${escaped}`;
+        if (matchType === 'ends') return `${escaped}$`;
+        return escaped;
+    }
+
+    document.getElementById('addSeriesRuleForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        const matchType = document.getElementById('seriesMatchType').value;
+        const text = document.getElementById('seriesPattern').value;
+        const sId = document.getElementById('targetSeries').value;
+
+        const payload = { pattern: buildRegex(matchType, text) };
+
+        try {
+            const response = await fetch(`/api/series/${encodeURIComponent(sId)}/rules`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (response.ok) location.reload();
+            else { const err = await response.json(); alert('Error: ' + (err.detail || 'Failed')); }
+        } catch (error) { alert('Error: ' + error.message); }
+    });
+
+    async function deleteRule(ruleId) {
+        if (!confirm(`Delete regex rule? Events previously bound by this rule will remain inside the series.`)) return;
+        try {
+            const response = await fetch(`/api/rules/${encodeURIComponent(ruleId)}`, { method: 'DELETE' });
+            if (response.ok) location.reload();
+            else alert('Failed to delete rule');
+        } catch (error) { alert('Error: ' + error.message); }
+    }
+</script>
+{% endblock %}

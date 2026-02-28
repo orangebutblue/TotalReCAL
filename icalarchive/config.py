@@ -5,7 +5,7 @@ except ImportError:
     import tomli
 import tomli_w
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Literal
 from dataclasses import dataclass, field, asdict
 
 
@@ -15,6 +15,7 @@ class SourceConfig:
     url: str
     fetch_interval_minutes: int = 30
     enabled: bool = True
+    color: str = "#0d6efd"
 
 
 @dataclass
@@ -31,8 +32,8 @@ class OutputConfig:
 class RuleConfig:
     """Configuration for an auto-hide rule."""
     rule_id: str
-    rule_type: str
-    params: Dict[str, Any] = field(default_factory=dict)
+    rule_type: Literal["hide_event", "add_to_series"]
+    params: Dict[str, Any] = field(default_factory=dict) # e.g., {"regex": ".*spam.*", "field": "summary", "series_id": "optional_id"}
 
 
 @dataclass

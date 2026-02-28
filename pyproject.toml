@@ -1,6 +1,6 @@
 [project]
 name = "icalarchive"
-version = "0.1.0"
+version = "0.3.0"
 description = "Subscribe to external iCal feeds and accumulate events permanently"
 requires-python = ">=3.11"
 dependencies = [

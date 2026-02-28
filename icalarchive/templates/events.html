@@ -7,19 +7,15 @@
 
 <div class="card mt-3">
     <div class="card-body">
-        <form method="get" class="row g-3">
+        <form class="row g-3" onsubmit="event.preventDefault();">
             <div class="col-md-4">
                 <label for="source" class="form-label">Filter by Source</label>
-                <select name="source" id="source" class="form-select">
+                <select id="source" class="form-select">
                     <option value="">All Sources</option>
                     {% for src in sources %}
-                    <option value="{{ src }}" {% if selected_source==src %}selected{% endif %}>{{ src }}</option>
+                    <option value="{{ src }}">{{ src }}</option>
                     {% endfor %}
                 </select>
-            </div>
-            <div class="col-md-8">
-                <label class="form-label">&nbsp;</label><br>
-                <button type="submit" class="btn btn-primary">Filter</button>
             </div>
         </form>
     </div>
@@ -31,75 +27,59 @@
             placeholder="Instant Search (filters summaries below instantly...)">
     </div>
     <div class="card-body">
-        {% if events %}
         <table class="table table-hover" id="eventsTable">
             <thead>
                 <tr>
                     <th>Source</th>
                     <th>Summary</th>
                     <th>Start</th>
-                    <th>Categories</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
             </thead>
-            <tbody>
-                {% for event in events %}
+            <tbody id="eventsTableBody">
                 <tr>
-                    <td><span class="badge bg-secondary">{{ event.source }}</span></td>
-                    <td>{{ event.summary }}</td>
-                    <td>{{ event.start }}</td>
-                    <td>
-                        {% if event.categories %}
-                        {% if event.categories is string %}
-                        <span class="badge bg-info">{{ event.categories }}</span>
-                        {% else %}
-                        {% for cat in event.categories %}
-                        <span class="badge bg-info">{{ cat }}</span>
-                        {% endfor %}
-                        {% endif %}
-                        {% endif %}
-                    </td>
-                    <td>
-                        {% if event.hidden %}
-                        <span class="badge bg-danger">Hidden</span>
-                        {% else %}
-                        <span class="badge bg-success">Visible</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary"
-                            onclick="toggleHidden('{{ event.uid }}', {{ 'true' if event.hidden else 'false' }})">
-                            {% if event.hidden %}Show{% else %}Hide{% endif %}
-                        </button>
-                    </td>
+                    <td colspan="5" class="text-center text-muted">Loading events...</td>
                 </tr>
-                {% endfor %}
             </tbody>
         </table>
+    </div>
+</div>
 
-        <!-- Pagination -->
-        {% if pages > 1 %}
-        <nav>
-            <ul class="pagination">
-                {% for p in range(1, pages + 1) %}
-                <li class="page-item {% if p == page %}active{% endif %}">
-                    <a class="page-link"
-                        href="?page={{ p }}{% if selected_source %}&source={{ selected_source }}{% endif %}">{{ p }}</a>
-                </li>
-                {% endfor %}
-            </ul>
-        </nav>
-        {% endif %}
-        {% else %}
-        <p class="text-muted">No events found.</p>
-        {% endif %}
+<!-- Series Action Modal -->
+<div class="modal fade" id="seriesModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Manage Series for Event</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Series Management</label>
+                    <div class="input-group mb-2">
+                        <select id="seriesSelect" class="form-select">
+                            <option value="">Select a series...</option>
+                        </select>
+                        <button class="btn btn-outline-primary" id="addToSeriesBtn">Add to Series</button>
+                    </div>
+                    <div class="input-group">
+                        <input type="text" id="newSeriesName" class="form-control"
+                            placeholder="Or create new series...">
+                        <button class="btn btn-outline-success" id="createNewSeriesBtn">Create & Add</button>
+                    </div>
+                    <div id="currentSeriesList" class="mt-2 small"></div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+    let selectedEventUid = null;
+    let seriesModalInstance;
     async function toggleHidden(uid, isHidden) {
         const action = isHidden ? 'show' : 'hide';
         try {
@@ -116,23 +96,181 @@
         }
     }
 
-    // Client-side Instant Search
-    document.getElementById('instantSearch')?.addEventListener('input', function (e) {
-        const term = e.target.value.toLowerCase();
-        const rows = document.querySelectorAll('#eventsTable tbody tr');
+    let allEventsData = [];
 
-        rows.forEach(row => {
-            // Summary is the 2nd column (index 1)
-            const summaryCell = row.cells[1];
-            if (summaryCell) {
-                const text = summaryCell.textContent.toLowerCase();
-                if (text.includes(term)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
+    async function initEvents() {
+        try {
+            const res = await fetch('/api/events/all');
+            allEventsData = await res.json();
+            renderTable(allEventsData);
+        } catch (e) {
+            document.getElementById('eventsTableBody').innerHTML = '<tr><td colspan="5" class="text-center text-danger">Failed to load events.</td></tr>';
+        }
+    }
+
+    function renderTable(data) {
+        const tbody = document.getElementById('eventsTableBody');
+
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No events found.</td></tr>';
+            return;
+        }
+
+        let html = '';
+        data.forEach(event => {
+            const hiddenBadge = event.hidden
+                ? '<span class="badge bg-danger">Hidden</span>'
+                : '<span class="badge bg-success">Visible</span>';
+
+            const actionText = event.hidden ? 'Show' : 'Hide';
+            const seriesIcon = event.in_series ? '🔗 ' : '';
+
+            html += `
+                <tr>
+                    <td><span class="badge bg-secondary">${event.source}</span></td>
+                    <td>${seriesIcon}${event.summary}</td>
+                    <td>${new Date(event.start).toLocaleString()}</td>
+                    <td>${hiddenBadge}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary" onclick="toggleHidden('${event.uid}', ${event.hidden})">${actionText}</button>
+                        <button class="btn btn-sm btn-outline-info" onclick="openSeriesModal('${event.uid}')">Series</button>
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = html;
+    }
+
+    function runFilters() {
+        const term = document.getElementById('instantSearch').value.toLowerCase();
+        const sourceTerm = document.getElementById('source').value;
+
+        const filtered = allEventsData.filter(ev => {
+            const matchesSearch = ev.summary.toLowerCase().includes(term) || ev.source.toLowerCase().includes(term);
+            const matchesSource = sourceTerm ? ev.source === sourceTerm : true;
+            return matchesSearch && matchesSource;
+        });
+        renderTable(filtered);
+    }
+
+    // Client-side Instant Search & Source Filter
+    document.getElementById('instantSearch').addEventListener('input', runFilters);
+    document.getElementById('source').addEventListener('change', runFilters);
+
+    async function loadSeriesAndCheckEvent() {
+        try {
+            const response = await fetch('/api/series');
+            const data = await response.json();
+            const select = document.getElementById('seriesSelect');
+            select.innerHTML = '<option value="">Select a series...</option>';
+
+            const currentSeriesDiv = document.getElementById('currentSeriesList');
+            currentSeriesDiv.innerHTML = '';
+
+            let containingSeries = [];
+
+            for (const [id, s] of Object.entries(data)) {
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = s.name;
+                select.appendChild(opt);
+
+                if (selectedEventUid && s.event_uids && s.event_uids.includes(selectedEventUid)) {
+                    containingSeries.push(s.name);
                 }
             }
+
+            if (containingSeries.length > 0) {
+                currentSeriesDiv.innerHTML = '<strong>Currently in:</strong> ' + containingSeries.join(', ');
+            } else {
+                currentSeriesDiv.innerHTML = '<span class="text-muted">Not in any series</span>';
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    }
+
+    function openSeriesModal(uid) {
+        selectedEventUid = uid;
+        loadSeriesAndCheckEvent();
+        if (!seriesModalInstance) {
+            seriesModalInstance = new bootstrap.Modal(document.getElementById('seriesModal'));
+        }
+        seriesModalInstance.show();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        seriesModalInstance = new bootstrap.Modal(document.getElementById('seriesModal'));
+
+        document.getElementById('addToSeriesBtn').addEventListener('click', async () => {
+            if (!selectedEventUid) return;
+            const sid = document.getElementById('seriesSelect').value;
+            if (!sid) return alert('Please select a series first');
+
+            try {
+                const response = await fetch(`/api/series/${encodeURIComponent(sid)}/events`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uid: selectedEventUid })
+                });
+                if (response.ok) {
+                    alert('Event added to series!');
+                    loadSeriesAndCheckEvent();
+
+                    // Update main view array to reflect new series status
+                    const internalEvent = allEventsData.find(e => e.uid === selectedEventUid);
+                    if (internalEvent) internalEvent.in_series = true;
+                    runFilters();
+
+                } else {
+                    alert('Failed to add to series');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
         });
+
+        document.getElementById('createNewSeriesBtn').addEventListener('click', async () => {
+            if (!selectedEventUid) return;
+            const name = document.getElementById('newSeriesName').value.trim();
+            if (!name) return alert('Please enter a name for the new series');
+
+            try {
+                const createRes = await fetch(`/api/series`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+                if (!createRes.ok) throw new Error('Failed to create series');
+
+                const createData = await createRes.json();
+                const sid = createData.series_id;
+
+                const addRes = await fetch(`/api/series/${encodeURIComponent(sid)}/events`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uid: selectedEventUid })
+                });
+
+                if (addRes.ok) {
+                    document.getElementById('newSeriesName').value = '';
+                    alert(`Created series '${name}' and added event!`);
+                    loadSeriesAndCheckEvent();
+
+                    // Update main view array to reflect new series status
+                    const internalEvent = allEventsData.find(e => e.uid === selectedEventUid);
+                    if (internalEvent) internalEvent.in_series = true;
+                    runFilters();
+
+                } else {
+                    throw new Error('Failed to add event to newly created series');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        });
+
+        initEvents();
     });
 </script>
 {% endblock %}

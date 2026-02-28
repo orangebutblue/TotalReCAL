@@ -15,10 +15,33 @@
                 <label for="ruleType" class="form-label">Rule Type</label>
                 <select class="form-select" id="ruleType" required>
                     <option value="">Select rule type...</option>
-                    <option value="category_exclude">Exclude by Category</option>
-                    <option value="summary_regex">Hide by Summary Regex</option>
-                    <option value="description_regex">Hide by Description Regex</option>
+                    <option value="category_exclude">Hide: Exclude by Category</option>
+                    <option value="summary_regex">Hide: by Summary Regex</option>
+                    <option value="description_regex">Hide: by Description Regex</option>
+                    <option value="add_to_series">Auto-Assign: Series by Summary Regex</option>
                 </select>
+            </div>
+
+            <div id="seriesAssignParams" style="display: none;" class="bg-light p-3 rounded mb-3 border">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Target Series</label>
+                    <select class="form-select mb-3" id="targetSeries" required>
+                        <option value="">Select a target series...</option>
+                        {% for s_id, s_data in series_data.items() %}
+                        <option value="{{ s_id }}">{{ s_data.name }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <label class="form-label fw-bold">Summary Text Rule</label>
+                    <select class="form-select mb-2" id="seriesMatchType">
+                        <option value="contains" selected>Contains</option>
+                        <option value="exact">Exact Match</option>
+                        <option value="starts">Starts With</option>
+                        <option value="ends">Ends With</option>
+                        <option value="regex">Custom Regex (Advanced)</option>
+                    </select>
+                    <input type="text" class="form-control" id="seriesPattern" placeholder="Text to match...">
+                </div>
             </div>
 
             <div id="categoryExcludeParams" style="display: none;">
@@ -110,11 +133,15 @@
     const categoryParams = document.getElementById('categoryExcludeParams');
     const summaryParams = document.getElementById('summaryRegexParams');
     const descriptionParams = document.getElementById('descriptionRegexParams');
+    const seriesParams = document.getElementById('seriesAssignParams');
 
     ruleType.addEventListener('change', () => {
         categoryParams.style.display = 'none';
         summaryParams.style.display = 'none';
         descriptionParams.style.display = 'none';
+        seriesParams.style.display = 'none';
+
+        document.getElementById('targetSeries').required = false;
 
         if (ruleType.value === 'category_exclude') {
             categoryParams.style.display = 'block';
@@ -122,6 +149,9 @@
             summaryParams.style.display = 'block';
         } else if (ruleType.value === 'description_regex') {
             descriptionParams.style.display = 'block';
+        } else if (ruleType.value === 'add_to_series') {
+            seriesParams.style.display = 'block';
+            document.getElementById('targetSeries').required = true;
         }
     });
 
@@ -153,6 +183,11 @@
             const matchType = document.getElementById('descMatchType').value;
             const text = document.getElementById('descriptionPattern').value;
             params = { pattern: buildRegex(matchType, text) };
+        } else if (type === 'add_to_series') {
+            const matchType = document.getElementById('seriesMatchType').value;
+            const text = document.getElementById('seriesPattern').value;
+            const sId = document.getElementById('targetSeries').value;
+            params = { pattern: buildRegex(matchType, text), series_id: sId };
         }
 
         const data = { rule_type: type, params };

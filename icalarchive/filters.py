@@ -16,18 +16,19 @@ class FilterEngine:
     def is_hidden_by_rules(self, event: Event, all_events: Dict[str, Event]) -> bool:
         """Check if event should be hidden by auto-rules."""
         for rule in self.rules:
-            if self._apply_rule(rule, event, all_events):
-                return True
+            if rule.rule_type in ['category_exclude', 'summary_regex', 'description_regex']:
+                if self.matches_rule(rule, event, all_events):
+                    return True
         return False
     
-    def _apply_rule(self, rule: RuleConfig, event: Event, all_events: Dict[str, Event]) -> bool:
-        """Apply a single rule to an event."""
+    def matches_rule(self, rule: RuleConfig, event: Event, all_events: Dict[str, Event]) -> bool:
+        """Evaluate if an event matches the condition of a rule natively."""
         if rule.rule_type == 'category_exclude':
             categories = self._get_categories(event)
             exclude = rule.params.get('categories', [])
             return any(cat in exclude for cat in categories)
         
-        elif rule.rule_type == 'summary_regex':
+        elif rule.rule_type in ['summary_regex', 'add_to_series']:
             pattern = rule.params.get('pattern', '')
             summary = str(event.get('SUMMARY', ''))
             return bool(re.search(pattern, summary, re.IGNORECASE))

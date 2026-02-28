@@ -3,20 +3,23 @@
 {% block title %}Calendar View - ICalArchive{% endblock %}
 
 {% block content %}
-<div class="row mb-3">
-    <div class="col-md-6">
+<div class="row mb-3 align-items-center">
+    <div class="col-md-4">
         <h1>Calendar View</h1>
     </div>
-    <div class="col-md-4 text-end">
-        <select id="sourceFilter" class="form-select" onchange="refreshCalendar()">
+    <div class="col-md-8 text-end">
+        <div class="form-check form-switch d-inline-block me-3 text-start align-middle">
+            <input class="form-check-input" type="checkbox" id="showHiddenToggle" checked onchange="refreshCalendar()">
+            <label class="form-check-label" for="showHiddenToggle">Show Hidden</label>
+        </div>
+        <select id="sourceFilter" class="form-select d-inline-block w-auto me-2 align-middle"
+            onchange="refreshCalendar()">
             <option value="">All Sources</option>
             {% for src in sources %}
             <option value="{{ src }}">{{ src }}</option>
             {% endfor %}
         </select>
-    </div>
-    <div class="col-md-2 text-end">
-        <button class="btn btn-outline-secondary btn-sm" onclick="refreshCalendar()">Refresh</button>
+        <button class="btn btn-outline-secondary btn-sm align-middle" onclick="refreshCalendar()">Refresh</button>
     </div>
 </div>
 
@@ -38,99 +41,213 @@
                 <p><strong>Source:</strong> <span id="eventSource"></span></p>
                 <p><strong>Starts:</strong> <span id="eventStart"></span></p>
                 <p><strong>Status:</strong> <span id="eventStatus" class="badge"></span></p>
-                <hr>
                 <p class="text-muted small">Hiding an event acts equivalent to deleting it from your output feeds,
                     preventing it from ever appearing even if the upstream calendar re-broadcasts it.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" id="toggleHideBtn" class="btn"></button>
+                <hr>
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Series Management</label>
+                    <div class="input-group mb-2">
+                        <select id="seriesSelect" class="form-select">
+                            <option value="">Select a series...</option>
+                        </select>
+                        <button class="btn btn-outline-primary" id="addToSeriesBtn">Add to Series</button>
+                    </div>
+                    <div class="input-group">
+                        <input type="text" id="newSeriesName" class="form-control"
+                            placeholder="Or create new series...">
+                        <button class="btn btn-outline-success" id="createNewSeriesBtn">Create & Add</button>
+                    </div>
+                    <div id="currentSeriesList" class="mt-2 small"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" id="toggleHideBtn" class="btn"></button>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-{% endblock %}
+    {% endblock %}
 
-{% block scripts %}
-<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
-<script>
-    let calendar;
-    let selectedEventUid = null;
-    let selectedEventIsHidden = false;
-    const eventModal = new bootstrap.Modal(document.getElementById('eventModal'));
+    {% block scripts %}
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+    <script>
+        let calendar;
+        let selectedEventUid = null;
+        let selectedEventIsHidden = false;
+        const eventModal = new bootstrap.Modal(document.getElementById('eventModal'));
 
-    document.addEventListener('DOMContentLoaded', function () {
-        var calendarEl = document.getElementById('calendar');
-        calendar = new FullCalendar.Calendar(calendarEl, {
-            initialView: 'dayGridMonth',
-            headerToolbar: {
-                left: 'prev,next today',
-                center: 'title',
-                right: 'dayGridMonth,timeGridWeek,timeGridDay'
-            },
-            height: 700,
-            events: function (fetchInfo, successCallback, failureCallback) {
-                const source = document.getElementById('sourceFilter').value;
-                const url = source ? `/api/calendar-events?source=${encodeURIComponent(source)}` : '/api/calendar-events';
+        async function loadSeriesAndCheckEvent() {
+            try {
+                const response = await fetch('/api/series');
+                const data = await response.json();
+                const select = document.getElementById('seriesSelect');
+                select.innerHTML = '<option value="">Select a series...</option>';
 
-                fetch(url)
-                    .then(r => r.json())
-                    .then(data => successCallback(data))
-                    .catch(e => failureCallback(e));
-            },
-            eventClick: function (info) {
-                const props = info.event.extendedProps;
-                selectedEventUid = info.event.id;
-                selectedEventIsHidden = props.hidden;
+                const currentSeriesDiv = document.getElementById('currentSeriesList');
+                currentSeriesDiv.innerHTML = '';
 
-                document.getElementById('eventModalTitle').textContent = info.event.title || 'Untitled Event';
-                document.getElementById('eventSource').textContent = props.source;
-                document.getElementById('eventStart').textContent = info.event.start.toLocaleString();
+                let containingSeries = [];
 
-                const statusBadge = document.getElementById('eventStatus');
-                const toggleBtn = document.getElementById('toggleHideBtn');
+                for (const [id, s] of Object.entries(data)) {
+                    // Add to dropdown
+                    const opt = document.createElement('option');
+                    opt.value = id;
+                    opt.textContent = s.name;
+                    select.appendChild(opt);
 
-                if (selectedEventIsHidden) {
-                    statusBadge.textContent = 'Hidden (Ignored by Outputs)';
-                    statusBadge.className = 'badge bg-danger';
-                    toggleBtn.textContent = 'Unhide Event';
-                    toggleBtn.className = 'btn btn-success';
-                } else {
-                    statusBadge.textContent = 'Visible';
-                    statusBadge.className = 'badge bg-success';
-                    toggleBtn.textContent = 'Hide (Delete from Outputs)';
-                    toggleBtn.className = 'btn btn-danger';
+                    // Track if event is already in this series
+                    if (selectedEventUid && s.event_uids && s.event_uids.includes(selectedEventUid)) {
+                        containingSeries.push(s.name);
+                    }
                 }
 
-                eventModal.show();
-            }
-        });
-        calendar.render();
-
-        document.getElementById('toggleHideBtn').addEventListener('click', async () => {
-            if (!selectedEventUid) return;
-            const action = selectedEventIsHidden ? 'show' : 'hide';
-            try {
-                const response = await fetch(`/api/events/${encodeURIComponent(selectedEventUid)}/${action}`, {
-                    method: 'POST'
-                });
-                if (response.ok) {
-                    eventModal.hide();
-                    calendar.refetchEvents();
+                if (containingSeries.length > 0) {
+                    currentSeriesDiv.innerHTML = '<strong>Currently in:</strong> ' + containingSeries.join(', ');
                 } else {
-                    alert('Failed to update event status');
+                    currentSeriesDiv.innerHTML = '<span class="text-muted">Not in any series</span>';
                 }
             } catch (e) {
-                alert('Error: ' + e.message);
+                console.error(e);
             }
-        });
-    });
-
-    function refreshCalendar() {
-        if (calendar) {
-            calendar.refetchEvents();
         }
-    }
-</script>
-{% endblock %}
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var calendarEl = document.getElementById('calendar');
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                height: 700,
+                events: function (fetchInfo, successCallback, failureCallback) {
+                    const source = document.getElementById('sourceFilter').value;
+                    const showHidden = document.getElementById('showHiddenToggle').checked;
+
+                    const params = new URLSearchParams();
+                    if (source) params.append('source', source);
+                    params.append('show_hidden', showHidden);
+
+                    const url = `/api/calendar-events?${params.toString()}`;
+
+                    fetch(url)
+                        .then(r => r.json())
+                        .then(data => successCallback(data))
+                        .catch(e => failureCallback(e));
+                },
+                eventClick: function (info) {
+                    const props = info.event.extendedProps;
+                    selectedEventUid = info.event.id;
+                    selectedEventIsHidden = props.hidden;
+
+                    document.getElementById('eventModalTitle').textContent = info.event.title || 'Untitled Event';
+                    document.getElementById('eventSource').textContent = props.source;
+                    document.getElementById('eventStart').textContent = info.event.start.toLocaleString();
+
+                    const statusBadge = document.getElementById('eventStatus');
+                    const toggleBtn = document.getElementById('toggleHideBtn');
+
+                    if (selectedEventIsHidden) {
+                        statusBadge.textContent = 'Hidden (Ignored by Outputs)';
+                        statusBadge.className = 'badge bg-danger';
+                        toggleBtn.textContent = 'Unhide Event';
+                        toggleBtn.className = 'btn btn-success';
+                    } else {
+                        statusBadge.textContent = 'Visible';
+                        statusBadge.className = 'badge bg-success';
+                        toggleBtn.textContent = 'Hide (Delete from Outputs)';
+                        toggleBtn.className = 'btn btn-danger';
+                    }
+
+                    loadSeriesAndCheckEvent();
+                    eventModal.show();
+                }
+            });
+            calendar.render();
+
+            document.getElementById('toggleHideBtn').addEventListener('click', async () => {
+                if (!selectedEventUid) return;
+                const action = selectedEventIsHidden ? 'show' : 'hide';
+                try {
+                    const response = await fetch(`/api/events/${encodeURIComponent(selectedEventUid)}/${action}`, {
+                        method: 'POST'
+                    });
+                    if (response.ok) {
+                        eventModal.hide();
+                        calendar.refetchEvents();
+                    } else {
+                        alert('Failed to update event status');
+                    }
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                }
+            });
+
+            document.getElementById('addToSeriesBtn').addEventListener('click', async () => {
+                if (!selectedEventUid) return;
+                const sid = document.getElementById('seriesSelect').value;
+                if (!sid) return alert('Please select a series first');
+
+                try {
+                    const response = await fetch(`/api/series/${encodeURIComponent(sid)}/events`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ uid: selectedEventUid })
+                    });
+                    if (response.ok) {
+                        alert('Event added to series!');
+                        loadSeriesAndCheckEvent();
+                    } else {
+                        alert('Failed to add to series');
+                    }
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                }
+            });
+
+            document.getElementById('createNewSeriesBtn').addEventListener('click', async () => {
+                if (!selectedEventUid) return;
+                const name = document.getElementById('newSeriesName').value.trim();
+                if (!name) return alert('Please enter a name for the new series');
+
+                try {
+                    // 1. Create Series
+                    const createRes = await fetch(`/api/series`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name: name })
+                    });
+                    if (!createRes.ok) throw new Error('Failed to create series');
+
+                    const createData = await createRes.json();
+                    const sid = createData.series_id;
+
+                    // 2. Add Event to it
+                    const addRes = await fetch(`/api/series/${encodeURIComponent(sid)}/events`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ uid: selectedEventUid })
+                    });
+
+                    if (addRes.ok) {
+                        document.getElementById('newSeriesName').value = '';
+                        alert(`Created series '${name}' and added event!`);
+                        loadSeriesAndCheckEvent();
+                    } else {
+                        throw new Error('Failed to add event to newly created series');
+                    }
+                } catch (e) {
+                    alert('Error: ' + e.message);
+                }
+            });
+        });
+
+        function refreshCalendar() {
+            if (calendar) {
+                calendar.refetchEvents();
+            }
+        }
+    </script>
+    {% endblock %}
