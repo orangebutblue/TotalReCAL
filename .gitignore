@@ -25,8 +25,9 @@ venv/
 env/
 ENV/
 
-# Data directory
-/data/
+# Data directories (including test instances)
+data*/
+test_calendars/
 
 # IDE
 .vscode/
