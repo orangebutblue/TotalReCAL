@@ -108,7 +108,7 @@ class OutputCreate(BaseModel):
 
 
 class RuleCreate(BaseModel):
-    rule_type: Literal["hide_event", "add_to_series"]
+    rule_type: Literal["hide_event", "add_to_series", "category_exclude", "summary_regex", "description_regex"]
     params: Dict[str, Any] = {}
 
 
