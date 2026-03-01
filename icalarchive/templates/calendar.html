@@ -98,12 +98,14 @@
 
                     // Track if event is already in this series
                     if (selectedEventUid && s.event_uids && s.event_uids.includes(selectedEventUid)) {
-                        containingSeries.push(s.name);
+                        containingSeries.push({ id: id, name: s.name });
                     }
                 }
 
                 if (containingSeries.length > 0) {
-                    currentSeriesDiv.innerHTML = '<strong>Currently in:</strong> ' + containingSeries.join(', ');
+                    let html = '<strong>Currently in:</strong> ';
+                    html += containingSeries.map(s => `<a href="/series/${s.id}" class="badge bg-primary text-decoration-none me-1 shadow-sm fs-6 mt-1">Open ${s.name} <i class="bi bi-box-arrow-up-right ms-1"></i></a>`).join(' ');
+                    currentSeriesDiv.innerHTML = html;
                 } else {
                     currentSeriesDiv.innerHTML = '<span class="text-muted">Not in any series</span>';
                 }
@@ -139,6 +141,9 @@
                     right: 'dayGridMonth,timeGridWeek,timeGridDay'
                 },
                 height: 700,
+                dayHeaderFormat: { weekday: 'short', day: '2-digit', month: '2-digit', omitCommas: true },
+                slotLabelFormat: { hour: 'numeric', minute: '2-digit', hour12: false },
+                eventTimeFormat: { hour: 'numeric', minute: '2-digit', hour12: false },
                 datesSet: function (info) {
                     localStorage.setItem('cal_viewType', info.view.type);
                     localStorage.setItem('cal_currentDate', info.view.currentStart.toISOString());
@@ -165,7 +170,10 @@
 
                     document.getElementById('eventModalTitle').textContent = info.event.title || 'Untitled Event';
                     document.getElementById('eventSource').textContent = props.source;
-                    document.getElementById('eventStart').textContent = info.event.start.toLocaleString();
+
+                    const d = info.event.start;
+                    const dateStr = `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}. ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                    document.getElementById('eventStart').textContent = dateStr;
 
                     const statusBadge = document.getElementById('eventStatus');
                     const toggleBtn = document.getElementById('toggleHideBtn');

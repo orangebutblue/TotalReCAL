@@ -1,6 +1,6 @@
 import json
 import os
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Optional
 
 class SeriesManager:
     def __init__(self, data_dir: str):
@@ -42,7 +42,7 @@ class SeriesManager:
         self._cache[series_id] = {
             "name": name,
             "event_uids": [],
-            "color": "#6c757d" # Default Gray
+            "color": None
         }
         self._save()
         return series_id
@@ -73,7 +73,7 @@ class SeriesManager:
             return True
         return False
 
-    def update_series_color(self, series_id: str, color: str) -> bool:
+    def update_series_color(self, series_id: str, color: Optional[str]) -> bool:
         if series_id in self._cache:
             self._cache[series_id]["color"] = color
             self._save()

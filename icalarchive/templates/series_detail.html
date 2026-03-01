@@ -16,8 +16,10 @@
         {{ series.get('name', 'Unknown') }}
         <input type="color" class="form-control form-control-color ms-3 border-0 shadow-sm"
             style="width: 40px; height: 40px; padding: 0.25rem;" id="seriesColorPicker"
-            value="{{ series.get('color', '#6c757d') }}" title="Choose Series Calendar Color"
+            value="{{ series.get('color') or '#6c757d' }}" title="Choose Series Calendar Color"
             onchange="updateSeriesColor()">
+        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="clearSeriesColor()"
+            title="Use default Source Calendar color"><i class="bi bi-eraser"></i> Clear</button>
     </h2>
     <p class="text-muted">Manage the underlying events mapped to this Series, and define automated matching rules.
     </p>
@@ -87,7 +89,14 @@
         <div class="card shadow-sm border-0">
             <div class="card-header bg-white border-bottom d-flex justify-content-between align-items-center p-3">
                 <h5 class="mb-0 fw-bold text-primary"><i class="bi bi-list-check me-2"></i> Bound Events</h5>
-                <span class="badge bg-light text-dark border">{{ events|length }} Total</span>
+                <div class="d-flex align-items-center">
+                    <div class="form-check form-switch me-3 mb-0">
+                        <input class="form-check-input" type="checkbox" id="showPastEventsToggle">
+                        <label class="form-check-label text-muted small pt-1" for="showPastEventsToggle">Show Past
+                            Events</label>
+                    </div>
+                    <span class="badge bg-light text-dark border">{{ events|length }} Total</span>
+                </div>
             </div>
             <div class="card-body p-0 bg-white shadow-inner" style="max-height: 500px; overflow-y: auto;">
                 {% if events %}
@@ -126,20 +135,45 @@
         const now = new Date();
         let firstFutureEvent = null;
 
+        const toggle = document.getElementById('showPastEventsToggle');
+        const savedPref = localStorage.getItem('series_showPastEvents');
+        if (savedPref !== null) {
+            toggle.checked = savedPref === 'true';
+        } else {
+            toggle.checked = true; // default
+        }
+
+        function applyPastEventsFilter() {
+            const showPast = toggle.checked;
+            localStorage.setItem('series_showPastEvents', showPast);
+
+            items.forEach(item => {
+                if (item.classList.contains('is-past')) {
+                    if (showPast) {
+                        item.classList.remove('d-none');
+                        item.style.opacity = '0.4';
+                        item.style.backgroundColor = '#f8f9fa';
+                    } else {
+                        item.classList.add('d-none');
+                    }
+                }
+            });
+        }
+
+        toggle.addEventListener('change', applyPastEventsFilter);
+
         items.forEach(item => {
             const evDate = new Date(item.dataset.start);
             if (evDate < now) {
-                // Gray out past events
-                item.style.opacity = '0.4';
-                item.style.backgroundColor = '#f8f9fa';
+                item.classList.add('is-past');
             } else if (!firstFutureEvent) {
-                // Pinpoint the very first future event
                 firstFutureEvent = item;
             }
         });
 
+        applyPastEventsFilter();
+
         if (firstFutureEvent) {
-            // Auto-scroll the list container down to the first relevant event
             firstFutureEvent.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
     });
@@ -198,6 +232,22 @@
             else alert('Failed to delete rule');
         } catch (error) { alert('Error: ' + error.message); }
     }
+    async function clearSeriesColor() {
+        if (!confirm('Revert to the default Source calendar colors for this series?')) return;
+        const sid = "{{ series_id }}";
+        try {
+            const response = await fetch(`/api/series/${encodeURIComponent(sid)}/color`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ color: null })
+            });
+            if (response.ok) location.reload();
+            else alert('Failed to clear color.');
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
+    }
+
     async function updateSeriesColor() {
         const sid = "{{ series_id }}";
         const newColor = document.getElementById('seriesColorPicker').value;

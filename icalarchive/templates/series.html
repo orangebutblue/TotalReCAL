@@ -10,9 +10,16 @@
     <div class="col-md-10 text-end">
         <div class="d-inline-flex align-items-center me-3 p-1 border rounded bg-light shadow-sm">
             <span class="badge bg-secondary me-2"><i class="bi bi-zoom-in"></i> Zoom Scale</span>
-            <input type="text" id="calendarZoom" class="form-control form-control-sm border-0 bg-transparent fw-bold"
-                style="width: 140px; box-shadow: none;" value="1 month" placeholder="e.g. 2 weeks"
-                onchange="renderMatrix()">
+            <input type="number" id="calendarZoomVal"
+                class="form-control form-control-sm border-0 bg-transparent fw-bold text-end"
+                style="width: 50px; box-shadow: none;" value="1" min="1" onchange="renderMatrix()">
+            <select id="calendarZoomUnit" class="form-select form-select-sm border-0 bg-transparent fw-bold"
+                style="width: 90px; box-shadow: none;" onchange="renderMatrix()">
+                <option value="hour">Hours</option>
+                <option value="day">Days</option>
+                <option value="week">Weeks</option>
+                <option value="month" selected>Months</option>
+            </select>
         </div>
 
         <div class="btn-group me-2 shadow-sm">
@@ -145,22 +152,34 @@
             const seriesColor = colors[colorIdx % colors.length];
             colorIdx++;
 
+            // Create temporary array to sort by time before assigning sequence numbers
+            let sItems = [];
             for (const uid of sData.event_uids) {
                 if (eventsMap[uid]) {
                     const ev = eventsMap[uid];
                     let t = new Date(ev.start).getTime();
                     if (isNaN(t)) t = 0;
-
-                    items.push({
-                        uid: ev.uid,
-                        title: ev.title,
-                        time: t,
-                        dateStr: ev.start ? new Date(ev.start).toLocaleString() : 'Unknown Date',
-                        seriesId: sId,
-                        seriesName: sData.name,
-                        color: seriesColor
-                    });
+                    sItems.push({ ev, t });
                 }
+            }
+            sItems.sort((a, b) => a.t - b.t);
+
+            let seq = 1;
+            for (const itemData of sItems) {
+                const { ev, t } = itemData;
+                items.push({
+                    uid: ev.uid,
+                    title: ev.title,
+                    seq: seq++,
+                    time: t,
+                    dateStr: ev.start ? (() => {
+                        const d = new Date(ev.start);
+                        return `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}. ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                    })() : 'Unknown Date',
+                    seriesId: sId,
+                    seriesName: sData.name,
+                    color: seriesColor
+                });
             }
         }
         items.sort((a, b) => a.time - b.time);
@@ -197,13 +216,15 @@
         const modeTrack = document.querySelector('input[name="trackMode"]:checked').value;
         const modeScale = document.querySelector('input[name="scaleMode"]:checked').value;
         const modeOrient = document.querySelector('input[name="orientation"]:checked').value;
-        const zoomMode = document.getElementById('calendarZoom').value;
+        const zoomVal = document.getElementById('calendarZoomVal').value;
+        const zoomUnit = document.getElementById('calendarZoomUnit').value;
 
         // Save preferences
         localStorage.setItem('series_trackMode', modeTrack);
         localStorage.setItem('series_scaleMode', modeScale);
         localStorage.setItem('series_orientation', modeOrient);
-        localStorage.setItem('series_calendarZoom', zoomMode);
+        localStorage.setItem('series_calendarZoomVal', zoomVal);
+        localStorage.setItem('series_calendarZoomUnit', zoomUnit);
 
         const items = parseItems();
         if (items.length === 0) {
@@ -217,7 +238,7 @@
         let duration = maxTime - minTime;
         if (duration === 0) duration = 1000 * 60 * 60 * 24; // 1 day padding
 
-        const pxPerMs = modeScale === 'calendar' ? getZoomPixelsPerMs(zoomMode) : null;
+        const pxPerMs = modeScale === 'calendar' ? getZoomPixelsPerMs(zoomVal, zoomUnit) : null;
 
         // Calculate the absolute track boundaries based on zoom factor
         let trackPixels = 0;
@@ -229,13 +250,16 @@
         // Shared array across all tracks to track packed rectangles for true collision avoidance in Calendar Model
         const placedRects = [];
 
-        const createTrackCol = (titleText, trackId) => {
+        const createTrackCol = (titleText, trackId, trackColor) => {
             const wrap = document.createElement('div');
             wrap.className = 'w-100 mb-4';
 
             if (titleText) {
-                const title = document.createElement('h6');
-                title.className = 'fw-bold text-muted mb-3 text-uppercase badge bg-white border text-dark p-2 w-100 text-start';
+                const title = document.createElement('a');
+                title.href = '/series/' + trackId;
+                title.className = 'fw-bold mb-3 text-uppercase badge border p-2 w-100 text-start d-block text-decoration-none';
+                title.style.color = 'white';
+                title.style.backgroundColor = trackColor || '#6c757d';
                 title.textContent = titleText;
                 wrap.appendChild(title);
             }
@@ -272,16 +296,12 @@
             card.style.minWidth = modeOrient === 'horizontal' ? '200px' : 'auto';
             card.style.maxWidth = '250px';
             card.style.zIndex = '5';
-            let displayTitle = item.title;
+            let displayTitle = `#${item.seq} - ${item.title}`;
             let displayBadge = `<span class="badge text-white mb-1" style="background-color: ${item.color}">${item.seriesName}</span>`;
 
             // Deduplication Logic - if we are already in Multi-Track where the column header declares the Series, hide the series badge
             if (modeTrack === 'multi') {
                 displayBadge = '';
-                // If the auto-regex just matched the exact series name, hide the title too to prevent redundancy
-                if (item.title.toLowerCase().trim() === item.seriesName.toLowerCase().trim()) {
-                    displayTitle = `<span class="text-muted fst-italic">Standard Event</span>`;
-                }
             }
 
             card.innerHTML = `
@@ -377,15 +397,15 @@
 
             // Synthesize responsive scale ticks
             let tickMs;
-            if (zoomMode === 'fit') {
-                tickMs = duration / 4;
-            } else if (zoomMode === 'hour') {
+            if (zoomUnit === 'hour') {
                 tickMs = 1000 * 60 * 60;
-            } else if (zoomMode === 'day') {
+            } else if (zoomUnit === 'day') {
                 tickMs = 1000 * 60 * 60 * 24;
-            } else if (zoomMode === 'week') {
+            } else if (zoomUnit === 'week') {
                 tickMs = 1000 * 60 * 60 * 24 * 7;
-            } else if (zoomMode === 'month') {
+            } else if (zoomUnit === 'month') {
+                tickMs = 1000 * 60 * 60 * 24 * 30;
+            } else {
                 tickMs = 1000 * 60 * 60 * 24 * 30;
             }
             if (tickMs <= 0) tickMs = 1000;
@@ -405,12 +425,12 @@
 
                 const d = new Date(targetTime);
                 let timeString = '';
-                if (zoomMode === 'hour') {
+                if (zoomUnit === 'hour') {
                     timeString = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                } else if (zoomMode === 'day') {
-                    timeString = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                } else if (zoomUnit === 'day' || zoomUnit === 'week') {
+                    timeString = `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}.`;
                 } else {
-                    timeString = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                    timeString = `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}.${d.getFullYear()}`;
                 }
 
                 const marker = document.createElement('div');

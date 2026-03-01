@@ -560,7 +560,9 @@ async def get_calendar_events(source: Optional[str] = None, show_hidden: bool = 
         if is_in_series and not hidden:
             s_id = assigned_series[0]['id']
             series_data = state.series_manager.get_all_series().get(s_id, {})
-            final_color = series_data.get('color', source_color)
+            s_color = series_data.get('color')
+            if s_color and s_color != '#6c757d': # Allow legacy overrides to fallback safely
+                final_color = s_color
             
         events_out.append({
             'id': uid,
@@ -633,7 +635,7 @@ class SeriesEventParams(BaseModel):
     uid: str
 
 class SeriesColorUpdate(BaseModel):
-    color: str
+    color: Optional[str] = None
 
 @app.get("/api/series")
 async def list_series():
