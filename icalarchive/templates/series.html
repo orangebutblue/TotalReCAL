@@ -9,15 +9,10 @@
     </div>
     <div class="col-md-10 text-end">
         <div class="d-inline-flex align-items-center me-3 p-1 border rounded bg-light shadow-sm">
-            <span class="badge bg-secondary me-2"><i class="bi bi-zoom-in"></i> Calendar Zoom</span>
-            <select id="calendarZoom" class="form-select form-select-sm border-0 bg-transparent fw-bold"
-                style="width: 140px; box-shadow: none;" onchange="renderMatrix()">
-                <option value="fit">Fit to Window</option>
-                <option value="hour">1 Hour Scale</option>
-                <option value="day">1 Day Scale</option>
-                <option value="week">1 Week Scale</option>
-                <option value="month" selected>1 Month Scale</option>
-            </select>
+            <span class="badge bg-secondary me-2"><i class="bi bi-zoom-in"></i> Zoom Scale</span>
+            <input type="text" id="calendarZoom" class="form-control form-control-sm border-0 bg-transparent fw-bold"
+                style="width: 140px; box-shadow: none;" value="1 month" placeholder="e.g. 2 weeks"
+                onchange="renderMatrix()">
         </div>
 
         <div class="btn-group me-2 shadow-sm">
@@ -175,12 +170,24 @@
     /* ----------------------------------------------------
        TIMELINE RENDERING ENGINE
        ---------------------------------------------------- */
-    function getZoomPixelsPerMs(zoom) {
-        if (zoom === 'hour') return 300 / (1000 * 60 * 60);
-        if (zoom === 'day') return 300 / (1000 * 60 * 60 * 24);
-        if (zoom === 'week') return 300 / (1000 * 60 * 60 * 24 * 7);
-        if (zoom === 'month') return 300 / (1000 * 60 * 60 * 24 * 30);
-        return null; // fit
+    function getZoomPixelsPerMs(zoomStr) {
+        if (!zoomStr || zoomStr.toLowerCase().trim() === 'fit') return null;
+
+        const match = zoomStr.match(/([0-9.]+)\s*(min|hour|day|week|month|year)s?/i);
+        if (!match) return 300 / (1000 * 60 * 60 * 24 * 30); // Default 1 month
+
+        const val = parseFloat(match[1]);
+        const unit = match[2].toLowerCase();
+
+        let ms = 1000 * 60 * 60 * 24; // Base 1 day
+        if (unit.startsWith('min')) ms = 1000 * 60;
+        else if (unit.startsWith('hour')) ms = 1000 * 60 * 60;
+        else if (unit.startsWith('day')) ms = 1000 * 60 * 60 * 24;
+        else if (unit.startsWith('week')) ms = 1000 * 60 * 60 * 24 * 7;
+        else if (unit.startsWith('month')) ms = 1000 * 60 * 60 * 24 * 30;
+        else if (unit.startsWith('year')) ms = 1000 * 60 * 60 * 24 * 365;
+
+        return 300 / (ms * val); // 300 pixels per requested duration block
     }
 
     function renderMatrix() {
@@ -191,6 +198,12 @@
         const modeScale = document.querySelector('input[name="scaleMode"]:checked').value;
         const modeOrient = document.querySelector('input[name="orientation"]:checked').value;
         const zoomMode = document.getElementById('calendarZoom').value;
+
+        // Save preferences
+        localStorage.setItem('series_trackMode', modeTrack);
+        localStorage.setItem('series_scaleMode', modeScale);
+        localStorage.setItem('series_orientation', modeOrient);
+        localStorage.setItem('series_calendarZoom', zoomMode);
 
         const items = parseItems();
         if (items.length === 0) {
@@ -259,11 +272,22 @@
             card.style.minWidth = modeOrient === 'horizontal' ? '200px' : 'auto';
             card.style.maxWidth = '250px';
             card.style.zIndex = '5';
+            let displayTitle = item.title;
+            let displayBadge = `<span class="badge text-white mb-1" style="background-color: ${item.color}">${item.seriesName}</span>`;
+
+            // Deduplication Logic - if we are already in Multi-Track where the column header declares the Series, hide the series badge
+            if (modeTrack === 'multi') {
+                displayBadge = '';
+                // If the auto-regex just matched the exact series name, hide the title too to prevent redundancy
+                if (item.title.toLowerCase().trim() === item.seriesName.toLowerCase().trim()) {
+                    displayTitle = `<span class="text-muted fst-italic">Standard Event</span>`;
+                }
+            }
 
             card.innerHTML = `
                 <div class="card-body p-2 bg-white rounded">
-                    <span class="badge text-white mb-1" style="background-color: ${item.color}">${item.seriesName}</span>
-                    <strong class="d-block text-truncate text-dark" title="${item.title}">${item.title}</strong>
+                    ${displayBadge}
+                    <strong class="d-block text-truncate text-dark" title="${item.title}">${displayTitle}</strong>
                     <small class="text-muted" style="font-size: 0.75rem;">${item.dateStr}</small>
                 </div>
             `;
@@ -467,6 +491,28 @@
 
     // Master Boot
     document.addEventListener('DOMContentLoaded', () => {
+        // Restore Layout Preferences
+        const savedTrack = localStorage.getItem('series_trackMode');
+        const savedScale = localStorage.getItem('series_scaleMode');
+        const savedOrient = localStorage.getItem('series_orientation');
+        const savedZoom = localStorage.getItem('series_calendarZoom');
+
+        if (savedTrack) {
+            const el = document.querySelector(`input[name="trackMode"][value="${savedTrack}"]`);
+            if (el) el.checked = true;
+        }
+        if (savedScale) {
+            const el = document.querySelector(`input[name="scaleMode"][value="${savedScale}"]`);
+            if (el) el.checked = true;
+        }
+        if (savedOrient) {
+            const el = document.querySelector(`input[name="orientation"][value="${savedOrient}"]`);
+            if (el) el.checked = true;
+        }
+        if (savedZoom) {
+            document.getElementById('calendarZoom').value = savedZoom;
+        }
+
         renderMatrix();
     });
 

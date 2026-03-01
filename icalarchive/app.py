@@ -550,19 +550,28 @@ async def get_calendar_events(source: Optional[str] = None, show_hidden: bool = 
         source_color = getattr(config.sources.get(source_name, {}), 'color', '#0d6efd')
         
         # Check series membership indicator
-        is_in_series = len(state.series_manager.get_series_for_event(uid)) > 0
+        assigned_series = state.series_manager.get_series_for_event(uid)
+        is_in_series = len(assigned_series) > 0
         title_prefix = "🔗 " if is_in_series else ""
         title = title_prefix + str(event.get('SUMMARY', ''))
         
+        # Determine Color Priority
+        final_color = '#dc3545' if hidden else source_color
+        if is_in_series and not hidden:
+            s_id = assigned_series[0]['id']
+            series_data = state.series_manager.get_all_series().get(s_id, {})
+            final_color = series_data.get('color', source_color)
+            
         events_out.append({
             'id': uid,
             'title': title,
             'start': start_str,
             'end': end_str,
-            'color': '#dc3545' if hidden else source_color,
+            'color': final_color,
             'extendedProps': {
                 'source': source_name,
-                'hidden': hidden
+                'hidden': hidden,
+                'series': [s['name'] for s in assigned_series]
             }
         })
     return events_out
@@ -623,6 +632,9 @@ class SeriesCreate(BaseModel):
 class SeriesEventParams(BaseModel):
     uid: str
 
+class SeriesColorUpdate(BaseModel):
+    color: str
+
 @app.get("/api/series")
 async def list_series():
     return state.series_manager.get_all_series()
@@ -644,6 +656,12 @@ async def delete_series_api(series_id: str):
             state.config_manager.save(config)
             
         return {"status": "deleted"}
+    raise HTTPException(status_code=404, detail="Series not found")
+
+@app.put("/api/series/{series_id}/color")
+async def update_series_color_api(series_id: str, payload: SeriesColorUpdate):
+    if state.series_manager.update_series_color(series_id, payload.color):
+        return {"status": "updated"}
     raise HTTPException(status_code=404, detail="Series not found")
 
 @app.post("/api/series/{series_id}/events")

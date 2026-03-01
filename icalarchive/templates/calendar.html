@@ -9,11 +9,11 @@
     </div>
     <div class="col-md-8 text-end">
         <div class="form-check form-switch d-inline-block me-3 text-start align-middle">
-            <input class="form-check-input" type="checkbox" id="showHiddenToggle" checked onchange="refreshCalendar()">
+            <input class="form-check-input" type="checkbox" id="showHiddenToggle" onchange="saveStateAndRefresh()">
             <label class="form-check-label" for="showHiddenToggle">Show Hidden</label>
         </div>
         <select id="sourceFilter" class="form-select d-inline-block w-auto me-2 align-middle"
-            onchange="refreshCalendar()">
+            onchange="saveStateAndRefresh()">
             <option value="">All Sources</option>
             {% for src in sources %}
             <option value="{{ src }}">{{ src }}</option>
@@ -113,15 +113,36 @@
         }
 
         document.addEventListener('DOMContentLoaded', function () {
+            // Restore UI States
+            const savedShowHidden = localStorage.getItem('cal_showHidden');
+            const savedSource = localStorage.getItem('cal_sourceFilter');
+            const savedView = localStorage.getItem('cal_viewType') || 'dayGridMonth';
+            const savedDate = localStorage.getItem('cal_currentDate');
+
+            if (savedShowHidden !== null) {
+                document.getElementById('showHiddenToggle').checked = savedShowHidden === 'true';
+            } else {
+                document.getElementById('showHiddenToggle').checked = true; // Default
+            }
+
+            if (savedSource) {
+                document.getElementById('sourceFilter').value = savedSource;
+            }
+
             var calendarEl = document.getElementById('calendar');
             calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: 'dayGridMonth',
+                initialView: savedView,
+                initialDate: savedDate || undefined,
                 headerToolbar: {
                     left: 'prev,next today',
                     center: 'title',
                     right: 'dayGridMonth,timeGridWeek,timeGridDay'
                 },
                 height: 700,
+                datesSet: function (info) {
+                    localStorage.setItem('cal_viewType', info.view.type);
+                    localStorage.setItem('cal_currentDate', info.view.currentStart.toISOString());
+                },
                 events: function (fetchInfo, successCallback, failureCallback) {
                     const source = document.getElementById('sourceFilter').value;
                     const showHidden = document.getElementById('showHiddenToggle').checked;
@@ -248,6 +269,12 @@
             if (calendar) {
                 calendar.refetchEvents();
             }
+        }
+
+        function saveStateAndRefresh() {
+            localStorage.setItem('cal_showHidden', document.getElementById('showHiddenToggle').checked);
+            localStorage.setItem('cal_sourceFilter', document.getElementById('sourceFilter').value);
+            refreshCalendar();
         }
     </script>
     {% endblock %}

@@ -11,17 +11,23 @@
 </nav>
 
 <div class="row mb-4 mt-2">
-    <div class="col-md-8">
-        <h2 class="fw-bold"><i class="bi bi-folder-fill text-primary me-2"></i> {{ series.get('name', 'Unknown') }}</h2>
-        <p class="text-muted">Manage the underlying events mapped to this Series, and define automated matching rules.
-        </p>
-    </div>
-    <div class="col-md-4 text-end">
-        <button class="btn btn-outline-danger shadow-sm"
-            onclick="deleteSeries('{{ series_id }}', '{{ series.name | default('') | escape }}')"><i
-                class="bi bi-trash me-1"></i>
-            Delete Entire Series</button>
-    </div>
+    <h2 class="fw-bold d-flex align-items-center">
+        <i class="bi bi-folder-fill text-primary me-3"></i>
+        {{ series.get('name', 'Unknown') }}
+        <input type="color" class="form-control form-control-color ms-3 border-0 shadow-sm"
+            style="width: 40px; height: 40px; padding: 0.25rem;" id="seriesColorPicker"
+            value="{{ series.get('color', '#6c757d') }}" title="Choose Series Calendar Color"
+            onchange="updateSeriesColor()">
+    </h2>
+    <p class="text-muted">Manage the underlying events mapped to this Series, and define automated matching rules.
+    </p>
+</div>
+<div class="col-md-4 text-end">
+    <button class="btn btn-outline-danger shadow-sm"
+        onclick="deleteSeries('{{ series_id }}', '{{ series.name | default('') | escape }}')"><i
+            class="bi bi-trash me-1"></i>
+        Delete Entire Series</button>
+</div>
 </div>
 
 <div class="row align-items-start">
@@ -87,9 +93,10 @@
                 {% if events %}
                 <ul class="list-group list-group-flush">
                     {% for ev in events %}
-                    <li class="list-group-item d-flex justify-content-between align-items-center p-3 border-bottom-0">
+                    <li class="list-group-item d-flex justify-content-between align-items-center p-3 border-bottom-0 event-item"
+                        data-start="{{ ev.start }}">
                         <div class="text-truncate me-3" style="max-width: 80%;">
-                            <strong class="text-dark">{{ ev.title }}</strong><br>
+                            <strong class="text-dark">#{{ loop.index }} - {{ ev.title }}</strong><br>
                             <small class="text-secondary"><i class="bi bi-calendar-event me-1"></i> {{ ev.start
                                 }}</small>
                         </div>
@@ -114,6 +121,28 @@
 
 {% block scripts %}
 <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const items = document.querySelectorAll('.event-item');
+        const now = new Date();
+        let firstFutureEvent = null;
+
+        items.forEach(item => {
+            const evDate = new Date(item.dataset.start);
+            if (evDate < now) {
+                // Gray out past events
+                item.style.opacity = '0.4';
+                item.style.backgroundColor = '#f8f9fa';
+            } else if (!firstFutureEvent) {
+                // Pinpoint the very first future event
+                firstFutureEvent = item;
+            }
+        });
+
+        if (firstFutureEvent) {
+            // Auto-scroll the list container down to the first relevant event
+            firstFutureEvent.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    });
     async function removeEvent(seriesId, uid) {
         if (!confirm('Unbind this event from the series?')) return;
         try {
@@ -168,6 +197,23 @@
             if (response.ok) location.reload();
             else alert('Failed to delete rule');
         } catch (error) { alert('Error: ' + error.message); }
+    }
+    async function updateSeriesColor() {
+        const sid = "{{ series_id }}";
+        const newColor = document.getElementById('seriesColorPicker').value;
+        try {
+            const response = await fetch(`/api/series/${encodeURIComponent(sid)}/color`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ color: newColor })
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                alert('Error saving color: ' + (err.detail || 'Unknown server error'));
+            }
+        } catch (e) {
+            alert('Network Error: ' + e.message);
+        }
     }
 </script>
 {% endblock %}

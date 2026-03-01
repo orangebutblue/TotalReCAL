@@ -41,7 +41,8 @@ class SeriesManager:
             
         self._cache[series_id] = {
             "name": name,
-            "event_uids": []
+            "event_uids": [],
+            "color": "#6c757d" # Default Gray
         }
         self._save()
         return series_id
@@ -68,6 +69,13 @@ class SeriesManager:
             
         if uid in self._cache[series_id]["event_uids"]:
             self._cache[series_id]["event_uids"].remove(uid)
+            self._save()
+            return True
+        return False
+
+    def update_series_color(self, series_id: str, color: str) -> bool:
+        if series_id in self._cache:
+            self._cache[series_id]["color"] = color
             self._save()
             return True
         return False
