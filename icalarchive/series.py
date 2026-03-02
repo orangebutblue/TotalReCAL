@@ -50,7 +50,6 @@ class SeriesManager:
 
         if migrated:
             self._save()
-            self._cache = {}
 
     def _save(self):
         try:

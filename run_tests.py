@@ -19,9 +19,7 @@ def start_instance(data_dir: str, port: int):
         f.write(config_str)
         
     proc = subprocess.Popen([str(PYTHON), "-m", "icalarchive", str(path)],
-                            cwd=BASE_DIR,
-                            stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL)
+                            cwd=BASE_DIR)
     return proc
 
 def wait_for_server(port, timeout=10):
@@ -29,7 +27,7 @@ def wait_for_server(port, timeout=10):
     while time.time() - start < timeout:
         try:
             r = httpx.get(f"http://localhost:{port}/")
-            if r.status_code == 200:
+            if r.status_code in [200, 307]:
                 print(f"Server {port} is up")
                 return True
         except:
@@ -157,9 +155,8 @@ def main():
         print("Instance 1 has 'Event 1 from Base'. App hides/removes them from output feed, not by destroying DB items. Hiding it...")
         # Get its uid
         uid1 = [e['uid'] for e in events1 if e['summary'] == 'Event 1 from Base'][0]
-        # Quote uid1 because it has @
-        import urllib.parse
-        c1.post(f"/api/events/{urllib.parse.quote(uid1, safe='')}/hide")
+        res = c1.post(f"/api/events/{uid1}/hide")
+        print("HIDE UID RES:", res.status_code, res.text)
         
         print("Verifying it is deleted/hidden from Instance 1's feed...")
         feed1 = c1.get("/cal/out1.ics").text

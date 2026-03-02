@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
     """Application lifespan manager."""
     # Ensure app components are initialized if running directly via uvicorn hook (e.g. docker-compose)
     if not hasattr(state, 'scheduler'):
-        data_dir = Path(os.environ.get("ICAL_DATA_DIR", "/data"))
+        data_dir = Path(os.environ.get("ICAL_DATA_DIR", "./data"))
         create_app(data_dir)
 
     # Startup
@@ -390,6 +390,7 @@ async def list_events(
 @app.post("/api/events/{uid}/hide")
 async def hide_event(uid: str):
     """Hide an event."""
+    print("====== DEBUG UID POST ======", repr(uid), flush=True)
     state.series_manager.add_event_to_series("hidden", uid)
     return {"status": "hidden"}
 
@@ -671,14 +672,6 @@ async def create_series_api(series: SeriesCreate):
 @app.delete("/api/series/{series_id}")
 async def delete_series_api(series_id: str):
     if state.series_manager.delete_series(series_id):
-        # Cascade delete any auto-assign rules bound to this series
-        config = state.config_manager.load()
-        original_count = len(config.rules)
-        config.rules = [r for r in config.rules if not (r.rule_type == 'add_to_series' and r.params.get('series_id') == series_id)]
-        
-        if len(config.rules) != original_count:
-            state.config_manager.save(config)
-            
         return {"status": "deleted"}
     raise HTTPException(status_code=404, detail="Series not found")
 
@@ -731,6 +724,14 @@ async def series_detail_page(request: Request, series_id: str):
     # Resolve rules affecting this series natively from the Series object
     patterns = s_data.get('match_patterns', [])
     series_rules = [{"rule_id": p, "params": {"pattern": p}} for p in patterns]
+    
+    return templates.TemplateResponse("series_detail.html", {
+        "request": request,
+        "series": s_data,
+        "series_id": series_id,
+        "events": bound_events,
+        "rules": series_rules
+    })
 
 @app.put("/api/series/{series_id}/rename")
 async def rename_series_endpoint(series_id: str, request: Request):

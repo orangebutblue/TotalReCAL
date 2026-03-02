@@ -7,7 +7,7 @@ from .app import create_app
 
 def main():
     """Run the application."""
-    data_dir = Path("/data")
+    data_dir = Path("./data")
     
     # Allow override via environment or command line
     if len(sys.argv) > 1:
