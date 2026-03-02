@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List, Literal
 from contextlib import asynccontextmanager
 
+import os
 from fastapi import FastAPI, HTTPException, Request, Response, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -40,6 +41,11 @@ state = AppState()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
+    # Ensure app components are initialized if running directly via uvicorn hook (e.g. docker-compose)
+    if not hasattr(state, 'scheduler'):
+        data_dir = Path(os.environ.get("ICAL_DATA_DIR", "/data"))
+        create_app(data_dir)
+
     # Startup
     logger.info("Starting ICalArchive")
     state.scheduler.start()
