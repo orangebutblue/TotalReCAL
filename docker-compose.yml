@@ -1,13 +1,14 @@
 services:
   icalarchive:
     build: .
-    command: ["uvicorn", "icalarchive.app:app", "--host", "0.0.0.0", "--port", "8001", "--reload", "--reload-dir", "/app/icalarchive"]
+    command: [ "uvicorn", "icalarchive.app:app", "--host", "0.0.0.0", "--port", "8001", "--reload", "--reload-dir", "/app/icalarchive" ]
     ports:
-      - "8000:8000"  # Calendar feeds
-      - "8001:8001"  # Web UI
+      - "8000:8000" # Calendar feeds
+      - "8001:8001" # Web UI
     volumes:
       - ./data:/data
       - ./icalarchive:/app/icalarchive
     restart: unless-stopped
     environment:
       - TZ=UTC
+      - ICAL_DATA_DIR=/data
