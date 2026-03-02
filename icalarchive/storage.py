@@ -7,46 +7,6 @@ from icalendar import Calendar, Event
 import threading
 
 
-class HiddenEventsManager:
-    """Manages manually hidden events via hidden.json."""
-    
-    def __init__(self, data_dir: Path):
-        self.hidden_file = data_dir / "hidden.json"
-        self.hidden_file.parent.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.Lock()
-        
-    def load(self) -> Set[str]:
-        """Load hidden event UIDs."""
-        if not self.hidden_file.exists():
-            return set()
-        
-        with open(self.hidden_file, 'r') as f:
-            data = json.load(f)
-        return set(data.get('hidden', []))
-    
-    def save(self, hidden: Set[str]) -> None:
-        """Save hidden event UIDs."""
-        with self._lock:
-            with open(self.hidden_file, 'w') as f:
-                json.dump({'hidden': sorted(list(hidden))}, f, indent=2)
-    
-    def hide(self, uid: str) -> None:
-        """Mark an event as hidden."""
-        hidden = self.load()
-        hidden.add(uid)
-        self.save(hidden)
-    
-    def unhide(self, uid: str) -> None:
-        """Unmark an event as hidden."""
-        hidden = self.load()
-        hidden.discard(uid)
-        self.save(hidden)
-    
-    def is_hidden(self, uid: str) -> bool:
-        """Check if an event is hidden."""
-        return uid in self.load()
-
-
 class EventStore:
     """Manages append-only event storage per source."""
     

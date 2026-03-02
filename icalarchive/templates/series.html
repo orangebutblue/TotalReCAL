@@ -8,6 +8,14 @@
         <h1>Series</h1>
     </div>
     <div class="col-md-10 text-end">
+        <div class="d-inline-flex align-items-center me-2 p-1 border rounded bg-light shadow-sm">
+            <div class="form-check form-switch ms-2 mb-0 me-2" title="Hide or Fade out Past Events">
+                <input class="form-check-input" type="checkbox" id="hidePastToggle" onchange="renderMatrix()">
+                <label class="form-check-label fw-bold text-muted small" style="margin-top: 2px;"
+                    for="hidePastToggle">Hide Past</label>
+            </div>
+        </div>
+
         <div class="d-inline-flex align-items-center me-3 p-1 border rounded bg-light shadow-sm">
             <span class="badge bg-secondary me-2"><i class="bi bi-zoom-in"></i> Zoom Scale</span>
             <input type="number" id="calendarZoomVal"
@@ -189,14 +197,8 @@
     /* ----------------------------------------------------
        TIMELINE RENDERING ENGINE
        ---------------------------------------------------- */
-    function getZoomPixelsPerMs(zoomStr) {
-        if (!zoomStr || zoomStr.toLowerCase().trim() === 'fit') return null;
-
-        const match = zoomStr.match(/([0-9.]+)\s*(min|hour|day|week|month|year)s?/i);
-        if (!match) return 300 / (1000 * 60 * 60 * 24 * 30); // Default 1 month
-
-        const val = parseFloat(match[1]);
-        const unit = match[2].toLowerCase();
+    function getZoomPixelsPerMs(val, unit) {
+        if (!val || !unit) return 300 / (1000 * 60 * 60 * 24 * 30); // Default 1 month
 
         let ms = 1000 * 60 * 60 * 24; // Base 1 day
         if (unit.startsWith('min')) ms = 1000 * 60;
@@ -206,7 +208,7 @@
         else if (unit.startsWith('month')) ms = 1000 * 60 * 60 * 24 * 30;
         else if (unit.startsWith('year')) ms = 1000 * 60 * 60 * 24 * 365;
 
-        return 300 / (ms * val); // 300 pixels per requested duration block
+        return 300 / (ms * parseFloat(val)); // 300 pixels per requested duration block
     }
 
     function renderMatrix() {
@@ -218,6 +220,7 @@
         const modeOrient = document.querySelector('input[name="orientation"]:checked').value;
         const zoomVal = document.getElementById('calendarZoomVal').value;
         const zoomUnit = document.getElementById('calendarZoomUnit').value;
+        const hidePast = document.getElementById('hidePastToggle').checked;
 
         // Save preferences
         localStorage.setItem('series_trackMode', modeTrack);
@@ -225,8 +228,14 @@
         localStorage.setItem('series_orientation', modeOrient);
         localStorage.setItem('series_calendarZoomVal', zoomVal);
         localStorage.setItem('series_calendarZoomUnit', zoomUnit);
+        localStorage.setItem('series_hidePast', hidePast);
 
-        const items = parseItems();
+        let items = parseItems();
+        if (hidePast) {
+            const cutoff = Date.now() - (1000 * 60 * 60 * 24); // Hide anything older than 24h
+            items = items.filter(i => i.time >= cutoff);
+        }
+
         if (items.length === 0) {
             container.innerHTML = '<div class="text-center pt-5 pb-5"><i class="bi bi-inbox fs-1 text-muted"></i><p class="text-muted mt-3">No events found in any series.</p></div>';
             return;
@@ -296,6 +305,14 @@
             card.style.minWidth = modeOrient === 'horizontal' ? '200px' : 'auto';
             card.style.maxWidth = '250px';
             card.style.zIndex = '5';
+            card.dataset.time = item.time;
+
+            const isPast = item.time < Date.now();
+            if (isPast) {
+                card.style.opacity = '0.5';
+                card.style.backgroundColor = '#f8f9fa';
+            }
+
             let displayTitle = `#${item.seq} - ${item.title}`;
             let displayBadge = `<span class="badge text-white mb-1" style="background-color: ${item.color}">${item.seriesName}</span>`;
 
@@ -507,6 +524,19 @@
                 container.appendChild(wrap);
             }
         }
+
+        setTimeout(() => {
+            const nowMs = Date.now();
+            if (modeScale === 'calendar' && pxPerMs !== null) {
+                const offset = (nowMs - minTime) * pxPerMs;
+                if (modeOrient === 'horizontal') container.scrollLeft = Math.max(0, offset - 250);
+                else container.scrollTop = Math.max(0, offset - 250);
+            } else {
+                const cards = Array.from(document.querySelectorAll('.card[data-time]'));
+                let targetCard = cards.find(c => parseInt(c.dataset.time) >= nowMs);
+                if (targetCard) targetCard.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            }
+        }, 150);
     }
 
     // Master Boot
@@ -515,7 +545,9 @@
         const savedTrack = localStorage.getItem('series_trackMode');
         const savedScale = localStorage.getItem('series_scaleMode');
         const savedOrient = localStorage.getItem('series_orientation');
-        const savedZoom = localStorage.getItem('series_calendarZoom');
+        const savedZoomVal = localStorage.getItem('series_calendarZoomVal');
+        const savedZoomUnit = localStorage.getItem('series_calendarZoomUnit');
+        const savedHidePast = localStorage.getItem('series_hidePast');
 
         if (savedTrack) {
             const el = document.querySelector(`input[name="trackMode"][value="${savedTrack}"]`);
@@ -529,9 +561,9 @@
             const el = document.querySelector(`input[name="orientation"][value="${savedOrient}"]`);
             if (el) el.checked = true;
         }
-        if (savedZoom) {
-            document.getElementById('calendarZoom').value = savedZoom;
-        }
+        if (savedZoomVal) document.getElementById('calendarZoomVal').value = savedZoomVal;
+        if (savedZoomUnit) document.getElementById('calendarZoomUnit').value = savedZoomUnit;
+        if (savedHidePast !== null) document.getElementById('hidePastToggle').checked = savedHidePast === 'true';
 
         renderMatrix();
     });

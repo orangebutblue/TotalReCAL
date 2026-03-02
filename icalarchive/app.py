@@ -11,10 +11,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from icalendar import Calendar
 
-from .config import ConfigManager, SourceConfig, OutputConfig, RuleConfig
-from .storage import EventStore, HiddenEventsManager
+from .config import ConfigManager, SourceConfig, OutputConfig
+from .storage import EventStore
 from .fetcher import Fetcher, FetchError
-from .filters import FilterEngine
 from .scheduler import FetchScheduler
 from .series import SeriesManager
 
@@ -30,7 +29,6 @@ class AppState:
     data_dir: Path
     config_manager: ConfigManager
     event_store: EventStore
-    hidden_manager: HiddenEventsManager
     fetcher: Fetcher
     scheduler: FetchScheduler
     series_manager: SeriesManager
@@ -132,22 +130,9 @@ async def fetch_source(source_name: str):
         new_count = state.event_store.merge_events(source_name, calendar)
         logger.info(f"Added {new_count} new events from {source_name}")
         
-        # Process add_to_series rules dynamically
-        filter_engine = FilterEngine(state.hidden_manager.load(), config.rules)
-        all_events = state.event_store.load_all_events()
-        for rule in config.rules:
-            if rule.rule_type == 'add_to_series':
-                target_series_id = rule.params.get('series_id')
-                if not target_series_id:
-                    continue
-                # Scan newly fetched events to see if they match the rule
-                for component in calendar.walk('VEVENT'):
-                    uid = str(component.get('UID', ''))
-                    full_uid = f"{source_name}::{uid}"
-                    # Use existing event from store for consistent parsing
-                    store_event = all_events.get(full_uid)
-                    if store_event and filter_engine.matches_rule(rule, store_event, all_events):
-                        state.series_manager.add_event_to_series(target_series_id, full_uid)
+        # Process add_to_series rules dynamically (DEPRECATED - now handled purely via resolution math on query)
+        pass
+        
         
     except FetchError as e:
         logger.error(f"Failed to fetch {source_name}: {e}")
@@ -164,10 +149,43 @@ def build_output_calendar(output_name: str) -> Calendar:
     # Load all events
     all_events = state.event_store.load_all_events()
     
-    # Apply filters
-    hidden_uids = state.hidden_manager.load()
-    filter_engine = FilterEngine(hidden_uids, config.rules)
-    filtered_events = filter_engine.filter_for_output(all_events, output_config)
+    # Apply filters mathematically via Set theory
+    hidden_uids = state.series_manager.resolve_series("hidden", all_events)
+    
+    import re
+    filtered_events = {}
+    for uid, event in all_events.items():
+        if uid in hidden_uids:
+            continue
+            
+        if output_config.include_sources:
+            source = uid.split('::', 1)[0]
+            if source not in output_config.include_sources:
+                continue
+                
+        categories = event.get('CATEGORIES', [])
+        if isinstance(categories, str):
+            categories = [cat.strip() for cat in categories.split(',')]
+        elif hasattr(categories, 'cats'):
+            categories = categories.cats
+        elif not isinstance(categories, list):
+            categories = []
+            
+        if output_config.filter_by_category and not any(cat in output_config.filter_by_category for cat in categories):
+            continue
+            
+        if output_config.exclude_category and any(cat in output_config.exclude_category for cat in categories):
+            continue
+            
+        summary = str(event.get('SUMMARY', ''))
+        
+        if output_config.include_summary_regex and not re.search(output_config.include_summary_regex, summary, re.IGNORECASE):
+            continue
+            
+        if output_config.exclude_summary_regex and re.search(output_config.exclude_summary_regex, summary, re.IGNORECASE):
+            continue
+            
+        filtered_events[uid] = event
     
     # Build calendar
     cal = Calendar()
@@ -318,7 +336,7 @@ async def list_events(
 ):
     """List events with filtering and pagination."""
     all_events = state.event_store.load_all_events()
-    hidden_uids = state.hidden_manager.load()
+    hidden_uids = state.series_manager.resolve_series("hidden", all_events)
     
     # Filter events
     filtered = []
@@ -366,14 +384,13 @@ async def list_events(
 @app.post("/api/events/{uid}/hide")
 async def hide_event(uid: str):
     """Hide an event."""
-    state.hidden_manager.hide(uid)
+    state.series_manager.add_event_to_series("hidden", uid)
     return {"status": "hidden"}
-
 
 @app.post("/api/events/{uid}/show")
 async def unhide_event(uid: str):
     """Unhide an event."""
-    state.hidden_manager.unhide(uid)
+    state.series_manager.remove_event_from_series("hidden", uid)
     return {"status": "shown"}
 
 
@@ -429,53 +446,50 @@ async def delete_output(name: str):
 # Rule API endpoints
 @app.get("/api/rules")
 async def list_rules():
-    """List all rules."""
-    config = state.config_manager.load()
-    return [rule.__dict__ for rule in config.rules]
-
+    """List all global hide rules (match patterns in hidden series)."""
+    hidden_series = state.series_manager._cache.get("hidden", {})
+    patterns = hidden_series.get("match_patterns", [])
+    return [{"rule_id": p, "rule_type": "summary_regex", "params": {"pattern": p}} for p in patterns]
 
 @app.post("/api/rules")
 async def create_rule(rule: RuleCreate):
-    """Create a new processing rule."""
-    import uuid
-    
+    """Create a new global hide rule (adds to hidden series match patterns)."""
     if rule.rule_type == 'add_to_series':
-        if 'series_id' not in rule.params or 'pattern' not in rule.params:
-             raise HTTPException(status_code=400, detail="Missing series_id or pattern params")
-        if rule.params['series_id'] not in state.series_manager.get_all_series():
-             raise HTTPException(status_code=400, detail="Invalid target series ID")
-             
-    rule_id = str(uuid.uuid4())
-    config = state.config_manager.load()
+        raise HTTPException(status_code=400, detail="Use the Series API for add_to_series")
+        
+    pattern = rule.params.get('pattern')
+    if not pattern:
+        raise HTTPException(status_code=400, detail="Missing pattern")
+        
+    hidden_series = state.series_manager._cache.get("hidden", {})
+    patterns = hidden_series.setdefault("match_patterns", [])
     
-    new_rule = RuleConfig(
-        rule_id=rule_id,
-        rule_type=rule.rule_type,
-        params=rule.params
-    )
+    if pattern in patterns:
+        raise HTTPException(status_code=400, detail="Rule already exists")
+        
+    patterns.append(pattern)
+    state.series_manager._save()
     
-    config.rules.append(new_rule)
-    state.config_manager.save(config)
-    
-    # Retroactively scan database and apply the rule automatically so it binds immediately
-    if rule.rule_type == 'add_to_series':
-        filter_engine = FilterEngine(state.hidden_manager.load(), config.rules)
-        all_events = state.event_store.load_all_events()
-        for uid, event in all_events.items():
-            if filter_engine.matches_rule(new_rule, event, all_events):
-                state.series_manager.add_event_to_series(new_rule.params['series_id'], uid)
-    
+    import base64
+    rule_id = base64.b64encode(pattern.encode()).decode()
     return {"status": "created", "rule_id": rule_id}
-
 
 @app.delete("/api/rules/{rule_id}")
 async def delete_rule(rule_id: str):
-    """Delete a rule."""
-    config = state.config_manager.load()
+    """Delete a global hide rule (removes from hidden series match patterns)."""
+    import base64
+    try:
+        pattern = base64.b64decode(rule_id.encode()).decode()
+    except Exception:
+        pattern = rule_id # Fallback if frontend sends raw string
+        
+    hidden_series = state.series_manager._cache.get("hidden", {})
+    patterns = hidden_series.get("match_patterns", [])
     
-    config.rules = [r for r in config.rules if r.rule_id != rule_id]
-    state.config_manager.save(config)
-    
+    if pattern in patterns:
+        patterns.remove(pattern)
+        state.series_manager._save()
+        
     return {"status": "deleted"}
 
 
@@ -501,7 +515,7 @@ async def events_page(request: Request):
 async def get_all_events():
     """Get all events unpaginated for client-side search."""
     all_events = state.event_store.load_all_events()
-    hidden_uids = state.hidden_manager.load()
+    hidden_uids = state.series_manager.resolve_series("hidden", all_events)
     
     events_out = []
     for uid, event in all_events.items():
@@ -516,7 +530,7 @@ async def get_all_events():
             'start': start.dt.isoformat() if start and hasattr(start, 'dt') else "",
             'end': end.dt.isoformat() if end and hasattr(end, 'dt') else "",
             'hidden': uid in hidden_uids,
-            'in_series': len(state.series_manager.get_series_for_event(uid)) > 0
+            'in_series': len(state.series_manager.get_series_for_event(uid, all_events)) > 0
         })
         
     events_out.sort(key=lambda x: x['start'], reverse=True)
@@ -527,7 +541,7 @@ async def get_all_events():
 async def get_calendar_events(source: Optional[str] = None, show_hidden: bool = True):
     """Feed for FullCalendar.js."""
     all_events = state.event_store.load_all_events()
-    hidden_uids = state.hidden_manager.load()
+    hidden_uids = state.series_manager.resolve_series("hidden", all_events)
     config = state.config_manager.load()
     
     events_out = []
@@ -550,7 +564,7 @@ async def get_calendar_events(source: Optional[str] = None, show_hidden: bool = 
         source_color = getattr(config.sources.get(source_name, {}), 'color', '#0d6efd')
         
         # Check series membership indicator
-        assigned_series = state.series_manager.get_series_for_event(uid)
+        assigned_series = state.series_manager.get_series_for_event(uid, all_events)
         is_in_series = len(assigned_series) > 0
         title_prefix = "🔗 " if is_in_series else ""
         title = title_prefix + str(event.get('SUMMARY', ''))
@@ -573,7 +587,9 @@ async def get_calendar_events(source: Optional[str] = None, show_hidden: bool = 
             'extendedProps': {
                 'source': source_name,
                 'hidden': hidden,
-                'series': [s['name'] for s in assigned_series]
+                'series': [s['name'] for s in assigned_series],
+                'location': str(event.get('LOCATION', '')),
+                'description': str(event.get('DESCRIPTION', ''))
             }
         })
     return events_out
@@ -688,32 +704,43 @@ async def series_detail_page(request: Request, series_id: str):
     s_data = series_map[series_id]
     all_events = state.event_store.load_all_events()
     
-    # Resolve actual event objects bound to this series
+    # Resolve actual event objects bound to this series dynamically
+    bound_uids = state.series_manager.resolve_series(series_id, all_events)
     bound_events = []
-    for uid in s_data.get('event_uids', []):
+    for uid in bound_uids:
         if uid in all_events:
             ev = all_events[uid]
             start = ev.get('DTSTART')
+            end = ev.get('DTEND')
             bound_events.append({
                 'uid': uid,
                 'title': str(ev.get('SUMMARY', '')),
-                'start': start.dt.isoformat() if start and hasattr(start, 'dt') else "Unknown"
+                'start': start.dt.isoformat() if start and hasattr(start, 'dt') else "",
+                'end': end.dt.isoformat() if end and hasattr(end, 'dt') else ""
             })
             
     # Sort chronologically
     bound_events.sort(key=lambda x: x['start'])
     
-    # Resolve rules affecting this series
-    config = state.config_manager.load()
-    series_rules = [r for r in config.rules if r.rule_type == 'add_to_series' and r.params.get('series_id') == series_id]
+    # Resolve rules affecting this series natively from the Series object
+    patterns = s_data.get('match_patterns', [])
+    series_rules = [{"rule_id": p, "params": {"pattern": p}} for p in patterns]
 
-    return templates.TemplateResponse("series_detail.html", {
-        "request": request,
-        "series_id": series_id,
-        "series": s_data,
-        "events": bound_events,
-        "rules": series_rules
-    })
+@app.put("/api/series/{series_id}/rename")
+async def rename_series_endpoint(series_id: str, request: Request):
+    """Update the visual alias of an existing Series."""
+    payload = await request.json()
+    new_name = payload.get('name')
+    if not new_name:
+        raise HTTPException(status_code=400, detail="Missing new name")
+        
+    s_map = state.series_manager.get_all_series()
+    if series_id not in s_map:
+        raise HTTPException(status_code=404, detail="Series not found")
+        
+    s_map[series_id]['name'] = new_name
+    state.series_manager._save()
+    return {"status": "renamed", "name": new_name}
 
 @app.get("/series", response_class=HTMLResponse)
 async def series_page(request: Request):
@@ -744,7 +771,6 @@ def create_app(data_dir: Path) -> FastAPI:
     state.data_dir = data_dir
     state.config_manager = ConfigManager(data_dir / "config.toml")
     state.event_store = EventStore(data_dir)
-    state.hidden_manager = HiddenEventsManager(data_dir)
     state.fetcher = Fetcher()
     state.scheduler = FetchScheduler()
     state.series_manager = SeriesManager(data_dir)
@@ -753,40 +779,43 @@ def create_app(data_dir: Path) -> FastAPI:
 
 @app.post("/api/series/{series_id}/rules")
 async def create_series_rule(series_id: str, payload: dict):
-    """Create an auto-assign rule strictly bound to a target series."""
-    if series_id not in state.series_manager.get_all_series():
+    """Create a pattern rule bounded natively to a specific series."""
+    series_map = state.series_manager.get_all_series()
+    if series_id not in series_map:
         raise HTTPException(status_code=404, detail="Series not found")
         
     pattern = payload.get('pattern')
     if not pattern:
         raise HTTPException(status_code=400, detail="Missing regex pattern")
         
-    import uuid
-    config = state.config_manager.load()
+    s_data = series_map[series_id]
+    patterns = s_data.get('match_patterns', [])
     
-    # Prevent duplicate rules targeting the same series with the exact same pattern
-    for rule in config.rules:
-        if rule.rule_type == 'add_to_series' and rule.params.get('series_id') == series_id and rule.params.get('pattern') == pattern:
-            raise HTTPException(status_code=400, detail="An identical auto-add rule already exists for this series.")
+    if pattern in patterns:
+        raise HTTPException(status_code=400, detail="An identical rule pattern already exists for this series.")
+        
+    patterns.append(pattern)
+    s_data['match_patterns'] = patterns
+    state.series_manager._save()
             
-    rule_id = str(uuid.uuid4())
+    return {"status": "created", "pattern": pattern}
+
+@app.delete("/api/series/{series_id}/rules/{pattern}")
+async def delete_series_rule(series_id: str, pattern: str):
+    """Delete a regex pattern bound natively to a specific series."""
+    import urllib.parse
+    decoded_pattern = urllib.parse.unquote(pattern)
     
-    new_rule = RuleConfig(
-        rule_id=rule_id,
-        rule_type="add_to_series",
-        params={"pattern": pattern, "series_id": series_id}
-    )
+    series_map = state.series_manager.get_all_series()
+    if series_id not in series_map:
+        raise HTTPException(status_code=404, detail="Series not found")
+        
+    s_data = series_map[series_id]
+    patterns = s_data.get('match_patterns', [])
     
-    config.rules.append(new_rule)
-    state.config_manager.save(config)
-    
-    # Retroactively scan database and apply the rule automatically
-    filter_engine = FilterEngine(state.hidden_manager.load(), config.rules)
-    all_events = state.event_store.load_all_events()
-    for uid, event in all_events.items():
-        if filter_engine.matches_rule(new_rule, event, all_events):
-            state.series_manager.add_event_to_series(series_id, uid)
-            
-    return {"status": "created", "rule_id": rule_id}
-    
-create_app(Path("/data"))
+    if decoded_pattern in patterns:
+        patterns.remove(decoded_pattern)
+        s_data['match_patterns'] = patterns
+        state.series_manager._save()
+        
+    return {"status": "deleted"}

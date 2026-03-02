@@ -29,19 +29,10 @@ class OutputConfig:
 
 
 @dataclass
-class RuleConfig:
-    """Configuration for an auto-hide rule."""
-    rule_id: str
-    rule_type: Literal["hide_event", "add_to_series"]
-    params: Dict[str, Any] = field(default_factory=dict) # e.g., {"regex": ".*spam.*", "field": "summary", "series_id": "optional_id"}
-
-
-@dataclass
 class AppConfig:
     """Main application configuration."""
     sources: Dict[str, SourceConfig] = field(default_factory=dict)
     outputs: Dict[str, OutputConfig] = field(default_factory=dict)
-    rules: list[RuleConfig] = field(default_factory=list)
     calendar_port: int = 8000
     ui_port: int = 8001
 
@@ -69,14 +60,9 @@ class ConfigManager:
         for name, out_data in data.get('outputs', {}).items():
             outputs[name] = OutputConfig(**out_data)
         
-        rules = []
-        for rule_data in data.get('rules', []):
-            rules.append(RuleConfig(**rule_data))
-        
         return AppConfig(
             sources=sources,
             outputs=outputs,
-            rules=rules,
             calendar_port=data.get('calendar_port', 8000),
             ui_port=data.get('ui_port', 8001),
         )
@@ -90,7 +76,6 @@ class ConfigManager:
         data = {
             'sources': {name: clean_dict(asdict(src)) for name, src in config.sources.items()},
             'outputs': {name: clean_dict(asdict(out)) for name, out in config.outputs.items()},
-            'rules': [clean_dict(asdict(rule)) for rule in config.rules],
             'calendar_port': config.calendar_port,
             'ui_port': config.ui_port,
         }

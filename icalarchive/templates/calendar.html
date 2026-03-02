@@ -32,257 +32,297 @@
 <!-- Event Action Modal -->
 <div class="modal fade" id="eventModal" tabindex="-1">
     <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="eventModalTitle">Event Details</h5>
+        <div class="modal-content shadow">
+            <div class="modal-header border-bottom-0 pb-0">
+                <h5 class="modal-title fw-bold" id="eventModalTitle">Loading...</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                <p><strong>Source:</strong> <span id="eventSource"></span></p>
-                <p><strong>Starts:</strong> <span id="eventStart"></span></p>
-                <p><strong>Status:</strong> <span id="eventStatus" class="badge"></span></p>
-                <p class="text-muted small">Hiding an event acts equivalent to deleting it from your output feeds,
-                    preventing it from ever appearing even if the upstream calendar re-broadcasts it.</p>
-                <hr>
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Series Management</label>
-                    <div class="input-group mb-2">
-                        <select id="seriesSelect" class="form-select">
-                            <option value="">Select a series...</option>
-                        </select>
-                        <button class="btn btn-outline-primary" id="addToSeriesBtn">Add to Series</button>
-                    </div>
-                    <div class="input-group">
-                        <input type="text" id="newSeriesName" class="form-control"
-                            placeholder="Or create new series...">
-                        <button class="btn btn-outline-success" id="createNewSeriesBtn">Create & Add</button>
-                    </div>
-                    <div id="currentSeriesList" class="mt-2 small"></div>
+            <div class="modal-body pt-2">
+                <div class="d-flex align-items-center mb-3">
+                    <span id="eventStatus" class="badge bg-secondary shadow-sm py-2 px-3 fw-bold me-2"></span>
+                    <button type="button" id="toggleHideBtn" class="btn btn-sm shadow-sm fw-bold px-3"></button>
                 </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                    <button type="button" id="toggleHideBtn" class="btn"></button>
+
+                <table class="table table-sm table-borderless mb-2">
+                    <tbody>
+                        <tr>
+                            <th scope="row" class="text-muted" style="width: 70px;">Source</th>
+                            <td id="eventSource" class="fw-bold"></td>
+                        </tr>
+                        <tr>
+                            <th scope="row" class="text-muted">Start</th>
+                            <td id="eventStart"></td>
+                        </tr>
+                        <tr>
+                            <th scope="row" class="text-muted">End</th>
+                            <td id="eventEnd"></td>
+                        </tr>
+                        <tr>
+                            <th scope="row" class="text-muted">Loc</th>
+                            <td id="eventLoc" class="text-truncate" style="max-width: 250px;"></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div id="eventDesc" class="small text-muted mb-3 bg-light p-2 rounded border"
+                    style="max-height: 120px; overflow-y: auto;"></div>
+
+                <hr class="text-secondary border-secondary">
+                <div class="mb-2">
+                    <label class="form-label fw-bold small text-uppercase text-muted mb-2">Series Bindings</label>
+                    <div id="currentSeriesList" class="mb-3 d-flex flex-column gap-2"></div>
+
+                    <div class="input-group input-group-sm mb-2 shadow-sm">
+                        <select id="seriesSelect" class="form-select border-2">
+                            <option value="">Bind to existing series...</option>
+                        </select>
+                        <button class="btn btn-primary fw-bold px-3" id="addToSeriesBtn">Bind</button>
+                    </div>
+                    <div class="input-group input-group-sm shadow-sm">
+                        <input type="text" id="newSeriesName" class="form-control border-2"
+                            placeholder="Create new series...">
+                        <button class="btn btn-success fw-bold px-3" id="createNewSeriesBtn">Create</button>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    {% endblock %}
+{% endblock %}
 
-    {% block scripts %}
-    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
-    <script>
-        let calendar;
-        let selectedEventUid = null;
-        let selectedEventIsHidden = false;
-        const eventModal = new bootstrap.Modal(document.getElementById('eventModal'));
+{% block scripts %}
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+<script>
+    let calendar;
+    let selectedEventUid = null;
+    let selectedEventIsHidden = false;
+    const eventModal = new bootstrap.Modal(document.getElementById('eventModal'));
 
-        async function loadSeriesAndCheckEvent() {
-            try {
-                const response = await fetch('/api/series');
-                const data = await response.json();
-                const select = document.getElementById('seriesSelect');
-                select.innerHTML = '<option value="">Select a series...</option>';
+    async function loadSeriesAndCheckEvent() {
+        try {
+            const response = await fetch('/api/series');
+            const data = await response.json();
+            const select = document.getElementById('seriesSelect');
+            select.innerHTML = '<option value="">Select a series...</option>';
 
-                const currentSeriesDiv = document.getElementById('currentSeriesList');
-                currentSeriesDiv.innerHTML = '';
+            const currentSeriesDiv = document.getElementById('currentSeriesList');
+            currentSeriesDiv.innerHTML = '';
 
-                let containingSeries = [];
+            let containingSeries = [];
 
-                for (const [id, s] of Object.entries(data)) {
-                    // Add to dropdown
-                    const opt = document.createElement('option');
-                    opt.value = id;
-                    opt.textContent = s.name;
-                    select.appendChild(opt);
+            for (const [id, s] of Object.entries(data)) {
+                // Add to dropdown
+                const opt = document.createElement('option');
+                opt.value = id;
+                opt.textContent = s.name;
+                select.appendChild(opt);
 
-                    // Track if event is already in this series
-                    if (selectedEventUid && s.event_uids && s.event_uids.includes(selectedEventUid)) {
-                        containingSeries.push({ id: id, name: s.name });
-                    }
+                // Track if event is already in this series
+                if (selectedEventUid && s.event_uids && s.event_uids.includes(selectedEventUid)) {
+                    containingSeries.push({ id: id, name: s.name });
                 }
-
-                if (containingSeries.length > 0) {
-                    let html = '<strong>Currently in:</strong> ';
-                    html += containingSeries.map(s => `<a href="/series/${s.id}" class="badge bg-primary text-decoration-none me-1 shadow-sm fs-6 mt-1">Open ${s.name} <i class="bi bi-box-arrow-up-right ms-1"></i></a>`).join(' ');
-                    currentSeriesDiv.innerHTML = html;
-                } else {
-                    currentSeriesDiv.innerHTML = '<span class="text-muted">Not in any series</span>';
-                }
-            } catch (e) {
-                console.error(e);
             }
-        }
 
-        document.addEventListener('DOMContentLoaded', function () {
-            // Restore UI States
-            const savedShowHidden = localStorage.getItem('cal_showHidden');
-            const savedSource = localStorage.getItem('cal_sourceFilter');
-            const savedView = localStorage.getItem('cal_viewType') || 'dayGridMonth';
-            const savedDate = localStorage.getItem('cal_currentDate');
-
-            if (savedShowHidden !== null) {
-                document.getElementById('showHiddenToggle').checked = savedShowHidden === 'true';
+            if (containingSeries.length > 0) {
+                currentSeriesDiv.innerHTML = containingSeries.map(s =>
+                    `<span class="badge bg-primary text-light shadow-sm fs-6 d-inline-flex align-items-center p-2 align-self-start">${s.name} 
+                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.5em;" onclick="unbindSeries('${s.id}')" title="Unbind"></button>
+                        </span>`
+                ).join('');
             } else {
-                document.getElementById('showHiddenToggle').checked = true; // Default
+                currentSeriesDiv.innerHTML = '<span class="text-muted small border px-2 py-1 rounded w-auto align-self-start">No bindings</span>';
             }
+        } catch (e) {
+            console.error(e);
+        }
+    }
 
-            if (savedSource) {
-                document.getElementById('sourceFilter').value = savedSource;
-            }
-
-            var calendarEl = document.getElementById('calendar');
-            calendar = new FullCalendar.Calendar(calendarEl, {
-                initialView: savedView,
-                initialDate: savedDate || undefined,
-                headerToolbar: {
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
-                },
-                height: 700,
-                dayHeaderFormat: { weekday: 'short', day: '2-digit', month: '2-digit', omitCommas: true },
-                slotLabelFormat: { hour: 'numeric', minute: '2-digit', hour12: false },
-                eventTimeFormat: { hour: 'numeric', minute: '2-digit', hour12: false },
-                datesSet: function (info) {
-                    localStorage.setItem('cal_viewType', info.view.type);
-                    localStorage.setItem('cal_currentDate', info.view.currentStart.toISOString());
-                },
-                events: function (fetchInfo, successCallback, failureCallback) {
-                    const source = document.getElementById('sourceFilter').value;
-                    const showHidden = document.getElementById('showHiddenToggle').checked;
-
-                    const params = new URLSearchParams();
-                    if (source) params.append('source', source);
-                    params.append('show_hidden', showHidden);
-
-                    const url = `/api/calendar-events?${params.toString()}`;
-
-                    fetch(url)
-                        .then(r => r.json())
-                        .then(data => successCallback(data))
-                        .catch(e => failureCallback(e));
-                },
-                eventClick: function (info) {
-                    const props = info.event.extendedProps;
-                    selectedEventUid = info.event.id;
-                    selectedEventIsHidden = props.hidden;
-
-                    document.getElementById('eventModalTitle').textContent = info.event.title || 'Untitled Event';
-                    document.getElementById('eventSource').textContent = props.source;
-
-                    const d = info.event.start;
-                    const dateStr = `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}. ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
-                    document.getElementById('eventStart').textContent = dateStr;
-
-                    const statusBadge = document.getElementById('eventStatus');
-                    const toggleBtn = document.getElementById('toggleHideBtn');
-
-                    if (selectedEventIsHidden) {
-                        statusBadge.textContent = 'Hidden (Ignored by Outputs)';
-                        statusBadge.className = 'badge bg-danger';
-                        toggleBtn.textContent = 'Unhide Event';
-                        toggleBtn.className = 'btn btn-success';
-                    } else {
-                        statusBadge.textContent = 'Visible';
-                        statusBadge.className = 'badge bg-success';
-                        toggleBtn.textContent = 'Hide (Delete from Outputs)';
-                        toggleBtn.className = 'btn btn-danger';
-                    }
-
-                    loadSeriesAndCheckEvent();
-                    eventModal.show();
-                }
-            });
-            calendar.render();
-
-            document.getElementById('toggleHideBtn').addEventListener('click', async () => {
-                if (!selectedEventUid) return;
-                const action = selectedEventIsHidden ? 'show' : 'hide';
-                try {
-                    const response = await fetch(`/api/events/${encodeURIComponent(selectedEventUid)}/${action}`, {
-                        method: 'POST'
-                    });
-                    if (response.ok) {
-                        eventModal.hide();
-                        calendar.refetchEvents();
-                    } else {
-                        alert('Failed to update event status');
-                    }
-                } catch (e) {
-                    alert('Error: ' + e.message);
-                }
-            });
-
-            document.getElementById('addToSeriesBtn').addEventListener('click', async () => {
-                if (!selectedEventUid) return;
-                const sid = document.getElementById('seriesSelect').value;
-                if (!sid) return alert('Please select a series first');
-
-                try {
-                    const response = await fetch(`/api/series/${encodeURIComponent(sid)}/events`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ uid: selectedEventUid })
-                    });
-                    if (response.ok) {
-                        alert('Event added to series!');
-                        loadSeriesAndCheckEvent();
-                    } else {
-                        alert('Failed to add to series');
-                    }
-                } catch (e) {
-                    alert('Error: ' + e.message);
-                }
-            });
-
-            document.getElementById('createNewSeriesBtn').addEventListener('click', async () => {
-                if (!selectedEventUid) return;
-                const name = document.getElementById('newSeriesName').value.trim();
-                if (!name) return alert('Please enter a name for the new series');
-
-                try {
-                    // 1. Create Series
-                    const createRes = await fetch(`/api/series`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ name: name })
-                    });
-                    if (!createRes.ok) throw new Error('Failed to create series');
-
-                    const createData = await createRes.json();
-                    const sid = createData.series_id;
-
-                    // 2. Add Event to it
-                    const addRes = await fetch(`/api/series/${encodeURIComponent(sid)}/events`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ uid: selectedEventUid })
-                    });
-
-                    if (addRes.ok) {
-                        document.getElementById('newSeriesName').value = '';
-                        alert(`Created series '${name}' and added event!`);
-                        loadSeriesAndCheckEvent();
-                    } else {
-                        throw new Error('Failed to add event to newly created series');
-                    }
-                } catch (e) {
-                    alert('Error: ' + e.message);
-                }
-            });
-        });
-
-        function refreshCalendar() {
-            if (calendar) {
+    window.unbindSeries = async function (seriesId) {
+        if (!selectedEventUid) return;
+        try {
+            const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}/events/${encodeURIComponent(selectedEventUid)}`, { method: 'DELETE' });
+            if (res.ok) {
+                loadSeriesAndCheckEvent();
                 calendar.refetchEvents();
             }
+        } catch (e) { alert(e.message); }
+    };
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Restore UI States
+        const savedShowHidden = localStorage.getItem('cal_showHidden');
+        const savedSource = localStorage.getItem('cal_sourceFilter');
+        const savedView = localStorage.getItem('cal_viewType') || 'dayGridMonth';
+        const savedDate = localStorage.getItem('cal_currentDate');
+
+        if (savedShowHidden !== null) {
+            document.getElementById('showHiddenToggle').checked = savedShowHidden === 'true';
+        } else {
+            document.getElementById('showHiddenToggle').checked = true; // Default
         }
 
-        function saveStateAndRefresh() {
-            localStorage.setItem('cal_showHidden', document.getElementById('showHiddenToggle').checked);
-            localStorage.setItem('cal_sourceFilter', document.getElementById('sourceFilter').value);
-            refreshCalendar();
+        if (savedSource) {
+            document.getElementById('sourceFilter').value = savedSource;
         }
-    </script>
-    {% endblock %}
+
+        var calendarEl = document.getElementById('calendar');
+        calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: savedView,
+            initialDate: savedDate || undefined,
+            locale: window.getAppLocale(),
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            height: 700,
+            dayHeaderFormat: { weekday: 'short', day: '2-digit', month: '2-digit', omitCommas: true },
+            slotLabelFormat: { hour: 'numeric', minute: '2-digit', hour12: false },
+            eventTimeFormat: { hour: 'numeric', minute: '2-digit', hour12: false },
+            datesSet: function (info) {
+                localStorage.setItem('cal_viewType', info.view.type);
+                localStorage.setItem('cal_currentDate', info.view.currentStart.toISOString());
+            },
+            events: function (fetchInfo, successCallback, failureCallback) {
+                const source = document.getElementById('sourceFilter').value;
+                const showHidden = document.getElementById('showHiddenToggle').checked;
+
+                const params = new URLSearchParams();
+                if (source) params.append('source', source);
+                params.append('show_hidden', showHidden);
+
+                const url = `/api/calendar-events?${params.toString()}`;
+
+                fetch(url)
+                    .then(r => r.json())
+                    .then(data => successCallback(data))
+                    .catch(e => failureCallback(e));
+            },
+            eventClick: function (info) {
+                const props = info.event.extendedProps;
+                selectedEventUid = info.event.id;
+                selectedEventIsHidden = props.hidden;
+
+                document.getElementById('eventModalTitle').textContent = info.event.title || 'Untitled Event';
+                document.getElementById('eventSource').textContent = props.source;
+
+                const startStr = info.event.startStr || info.event.start.toISOString();
+                const endStr = info.event.endStr || (info.event.end ? info.event.end.toISOString() : startStr);
+
+                document.getElementById('eventStart').textContent = window.formatSmartDateRange(startStr, endStr);
+                document.getElementById('eventEnd').parentElement.style.display = 'none';
+                document.getElementById('eventLoc').textContent = props.location || 'N/A';
+                document.getElementById('eventDesc').textContent = props.description || 'No description.';
+
+                const statusBadge = document.getElementById('eventStatus');
+                const toggleBtn = document.getElementById('toggleHideBtn');
+
+                if (selectedEventIsHidden) {
+                    statusBadge.textContent = 'Hidden (Ignored)';
+                    statusBadge.className = 'badge bg-danger shadow-sm py-2 px-3 fw-bold me-2 border';
+                    toggleBtn.innerHTML = '<i class="bi bi-eye"></i> Unhide';
+                    toggleBtn.className = 'btn btn-success btn-sm px-3 shadow-sm fw-bold';
+                } else {
+                    statusBadge.textContent = 'Visible';
+                    statusBadge.className = 'badge bg-success shadow-sm py-2 px-3 fw-bold me-2 border';
+                    toggleBtn.innerHTML = '<i class="bi bi-eye-slash"></i> Hide & Ignore';
+                    toggleBtn.className = 'btn btn-danger btn-sm px-3 shadow-sm fw-bold';
+                }
+
+                loadSeriesAndCheckEvent();
+                eventModal.show();
+            }
+        });
+        calendar.render();
+
+        document.getElementById('toggleHideBtn').addEventListener('click', async () => {
+            if (!selectedEventUid) return;
+            const action = selectedEventIsHidden ? 'show' : 'hide';
+            try {
+                const response = await fetch(`/api/events/${encodeURIComponent(selectedEventUid)}/${action}`, {
+                    method: 'POST'
+                });
+                if (response.ok) {
+                    eventModal.hide();
+                    calendar.refetchEvents();
+                } else {
+                    alert('Failed to update event status');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        });
+
+        document.getElementById('addToSeriesBtn').addEventListener('click', async () => {
+            if (!selectedEventUid) return;
+            const sid = document.getElementById('seriesSelect').value;
+            if (!sid) return alert('Please select a series first');
+
+            try {
+                const response = await fetch(`/api/series/${encodeURIComponent(sid)}/events`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uid: selectedEventUid })
+                });
+                if (response.ok) {
+                    alert('Event added to series!');
+                    loadSeriesAndCheckEvent();
+                } else {
+                    alert('Failed to add to series');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        });
+
+        document.getElementById('createNewSeriesBtn').addEventListener('click', async () => {
+            if (!selectedEventUid) return;
+            const name = document.getElementById('newSeriesName').value.trim();
+            if (!name) return alert('Please enter a name for the new series');
+
+            try {
+                // 1. Create Series
+                const createRes = await fetch(`/api/series`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name })
+                });
+                if (!createRes.ok) throw new Error('Failed to create series');
+
+                const createData = await createRes.json();
+                const sid = createData.series_id;
+
+                // 2. Add Event to it
+                const addRes = await fetch(`/api/series/${encodeURIComponent(sid)}/events`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uid: selectedEventUid })
+                });
+
+                if (addRes.ok) {
+                    document.getElementById('newSeriesName').value = '';
+                    alert(`Created series '${name}' and added event!`);
+                    loadSeriesAndCheckEvent();
+                } else {
+                    throw new Error('Failed to add event to newly created series');
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        });
+    });
+
+    function refreshCalendar() {
+        if (calendar) {
+            calendar.refetchEvents();
+        }
+    }
+
+    function saveStateAndRefresh() {
+        localStorage.setItem('cal_showHidden', document.getElementById('showHiddenToggle').checked);
+        localStorage.setItem('cal_sourceFilter', document.getElementById('sourceFilter').value);
+        refreshCalendar();
+    }
+</script>
+{% endblock %}

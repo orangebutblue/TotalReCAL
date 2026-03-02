@@ -11,22 +11,42 @@
 </nav>
 
 <div class="row mb-4 mt-2">
-    <h2 class="fw-bold d-flex align-items-center">
-        <i class="bi bi-folder-fill text-primary me-3"></i>
-        {{ series.get('name', 'Unknown') }}
-        <input type="color" class="form-control form-control-color ms-3 border-0 shadow-sm"
-            style="width: 40px; height: 40px; padding: 0.25rem;" id="seriesColorPicker"
-            value="{{ series.get('color') or '#6c757d' }}" title="Choose Series Calendar Color"
-            onchange="updateSeriesColor()">
-        <button class="btn btn-sm btn-outline-secondary ms-2" onclick="clearSeriesColor()"
-            title="Use default Source Calendar color"><i class="bi bi-eraser"></i> Clear</button>
-    </h2>
+    <div class="col-md-8 d-flex align-items-center flex-wrap gap-2">
+        <h2 class="fw-bold d-flex align-items-center mb-0">
+            <i class="bi bi-folder-fill text-primary me-3"></i>
+            <span id="seriesNameDisplay">{{ series.get('name', 'Unknown') }}</span>
+            <button class="btn btn-sm btn-light text-secondary ms-2 border shadow-sm" title="Rename Series"
+                onclick='renameSeries({{ series.get("name", "") | tojson }})'><i class="bi bi-pencil-fill"></i></button>
+        </h2>
+
+        <div class="d-flex align-items-center ms-lg-4 mt-2 mt-lg-0 border rounded p-1 shadow-sm bg-white">
+            <span class="text-muted small fw-bold text-uppercase ms-2 me-2">Color:</span>
+            {% if series.get('color') %}
+            <input type="color" class="form-control form-control-color border-0 shadow-sm p-0 m-0"
+                style="width: 32px; height: 32px; cursor: pointer;" id="seriesColorPicker"
+                value="{{ series.get('color') }}" title="Change assigned color" onchange="updateSeriesColor()">
+            {% else %}
+            <div class="d-inline-block position-relative shadow-sm bg-light border rounded"
+                style="width: 32px; height: 32px; cursor: pointer;"
+                title="Inheriting Source Colors. Click to override.">
+                <input type="color"
+                    class="form-control form-control-color w-100 h-100 border-0 opacity-0 position-absolute top-0 start-0"
+                    id="seriesColorPicker" value="#0d6efd" onchange="updateSeriesColor()" style="cursor: pointer;">
+                <div class="w-100 h-100 d-flex align-items-center justify-content-center" style="pointer-events: none;">
+                    <i class="bi bi-circle text-secondary fs-5 pb-1"></i>
+                </div>
+            </div>
+            {% endif %}
+
+            <button class="btn btn-sm btn-link text-danger text-decoration-none ms-1 px-2" onclick="clearSeriesColor()"
+                title="Use default Source Calendar color"><i class="bi bi-eraser-fill"></i> Reset</button>
+        </div>
+    </div>
     <p class="text-muted">Manage the underlying events mapped to this Series, and define automated matching rules.
     </p>
 </div>
 <div class="col-md-4 text-end">
-    <button class="btn btn-outline-danger shadow-sm"
-        onclick="deleteSeries('{{ series_id }}', '{{ series.name | default('') | escape }}')"><i
+    <button class="btn btn-outline-danger shadow-sm" onclick="deleteSeries('{{ series_id }}')"><i
             class="bi bi-trash me-1"></i>
         Delete Entire Series</button>
 </div>
@@ -36,46 +56,31 @@
     <div class="col-md-6">
         <div class="card shadow-sm border-0 mb-4">
             <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
-                <h5 class="mb-0"><i class="bi bi-magic me-2"></i> Auto-Add Events by Title</h5>
-                <span class="badge bg-secondary">Evaluates both Past & Future</span>
+                <h5 class="mb-0"><i class="bi bi-magic me-2"></i> Auto-Assign <span
+                        class="badge bg-secondary rounded-pill"
+                        title="Regex patterns defined here automatically evaluate and bind ALL matching events to this Series.">[?]</span>
+                </h5>
             </div>
             <div class="card-body bg-light">
-                <p class="text-muted small">Define a text pattern. Any past or future event whose Title matches this
-                    pattern will be automatically bound into this Series.</p>
-
-                <form id="addSeriesRuleForm" class="row align-items-end g-3">
+                <form id="addSeriesRuleForm" class="d-flex flex-column gap-3">
                     <input type="hidden" id="targetSeries" value="{{ series_id }}">
-                    <div class="col-md-4">
-                        <label class="form-label fw-bold text-muted small text-uppercase">Match Type</label>
-                        <select class="form-select border-2" id="seriesMatchType">
-                            <option value="contains" selected>Contains</option>
-                            <option value="exact">Exact Match</option>
-                            <option value="starts">Starts With</option>
-                            <option value="ends">Ends With</option>
-                            <option value="regex">Custom Regex</option>
-                        </select>
+                    <div>
+                        <input type="text" class="form-control border-2" id="seriesPattern" placeholder="Regex..."
+                            required>
                     </div>
-                    <div class="col-md-8">
-                        <label class="form-label fw-bold text-muted small text-uppercase">Summary Text Pattern</label>
-                        <input type="text" class="form-control border-2" id="seriesPattern"
-                            placeholder="e.g. 'Dentist' or 'Flight'..." required>
-                    </div>
-                    <div class="col-md-12 mt-3">
-                        <button type="submit" class="btn btn-success fw-bold w-100 shadow-sm"><i
-                                class="bi bi-lightning-charge me-1"></i>
-                            Add Rule & Bind Matches</button>
-                    </div>
+                    <button type="submit" class="btn btn-success fw-bold shadow-sm">Bind</button>
                 </form>
 
                 {% if rules %}
                 <div class="mt-4 pt-3 border-top">
-                    <h6 class="fw-bold mb-3 text-muted">Active Auto-Add Rules</h6>
+                    <h6 class="fw-bold mb-3 text-muted">Active Patterns</h6>
                     <ul class="list-group list-group-flush border rounded bg-white">
                         {% for rule in rules %}
                         <li class="list-group-item d-flex justify-content-between align-items-center p-2">
                             <code class="bg-light px-2 py-1 rounded text-dark border">{{ rule.params.pattern }}</code>
                             <button class="btn btn-sm btn-outline-danger border-0"
-                                onclick="deleteRule('{{ rule.rule_id }}')"><i class="bi bi-trash"></i></button>
+                                onclick="deleteRule(encodeURIComponent('{{ rule.rule_id }}'))"><i
+                                    class="bi bi-trash"></i></button>
                         </li>
                         {% endfor %}
                     </ul>
@@ -106,8 +111,8 @@
                         data-start="{{ ev.start }}">
                         <div class="text-truncate me-3" style="max-width: 80%;">
                             <strong class="text-dark">#{{ loop.index }} - {{ ev.title }}</strong><br>
-                            <small class="text-secondary"><i class="bi bi-calendar-event me-1"></i> {{ ev.start
-                                }}</small>
+                            <small class="text-secondary event-time" data-start="{{ ev.start }}"
+                                data-end="{{ ev.end }}"><i class="bi bi-clock me-1"></i> {{ ev.start }}</small>
                         </div>
                         <button class="btn btn-sm btn-light text-danger border shadow-sm"
                             onclick="removeEvent('{{ series_id }}', '{{ ev.uid }}')" title="Unbind from Series">
@@ -134,6 +139,12 @@
         const items = document.querySelectorAll('.event-item');
         const now = new Date();
         let firstFutureEvent = null;
+
+        document.querySelectorAll('.event-time').forEach(el => {
+            const start = el.getAttribute('data-start');
+            const end = el.getAttribute('data-end');
+            el.innerHTML = '<i class="bi bi-clock me-1"></i> ' + window.formatSmartDateRange(start, end);
+        });
 
         const toggle = document.getElementById('showPastEventsToggle');
         const savedPref = localStorage.getItem('series_showPastEvents');
@@ -186,8 +197,8 @@
         } catch (e) { alert('Error: ' + e.message); }
     }
 
-    async function deleteSeries(seriesId, name) {
-        if (!confirm(`Are you sure you want to completely delete the "${name}" series? This will NOT delete the underlying calendar events.`)) return;
+    async function deleteSeries(seriesId) {
+        if (!confirm(`Are you sure you want to completely delete this series? This will NOT delete the underlying calendar events.`)) return;
         try {
             const res = await fetch(`/api/series/${encodeURIComponent(seriesId)}`, { method: 'DELETE' });
             if (res.ok) window.location.href = '/series';
@@ -195,29 +206,33 @@
         } catch (e) { alert('Error: ' + e.message); }
     }
 
-    function buildRegex(matchType, text) {
-        if (matchType === 'regex') return text;
-        const escaped = text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        if (matchType === 'exact') return `^${escaped}$`;
-        if (matchType === 'starts') return `^${escaped}`;
-        if (matchType === 'ends') return `${escaped}$`;
-        return escaped;
+    async function renameSeries(oldName) {
+        const newName = prompt('Enter a new name for this Series:', oldName);
+        if (!newName || newName.trim() === '' || newName === oldName) return;
+
+        try {
+            const res = await fetch(`/api/series/{{ series_id }}/rename`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newName.trim() })
+            });
+            if (res.ok) location.reload();
+            else alert('Failed to rename series');
+        } catch (e) {
+            alert('Error: ' + e.message);
+        }
     }
 
     document.getElementById('addSeriesRuleForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-
-        const matchType = document.getElementById('seriesMatchType').value;
-        const text = document.getElementById('seriesPattern').value;
+        const text = document.getElementById('seriesPattern').value.trim();
         const sId = document.getElementById('targetSeries').value;
-
-        const payload = { pattern: buildRegex(matchType, text) };
 
         try {
             const response = await fetch(`/api/series/${encodeURIComponent(sId)}/rules`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify({ pattern: text })
             });
             if (response.ok) location.reload();
             else { const err = await response.json(); alert('Error: ' + (err.detail || 'Failed')); }
@@ -225,11 +240,12 @@
     });
 
     async function deleteRule(ruleId) {
-        if (!confirm(`Delete regex rule? Events previously bound by this rule will remain inside the series.`)) return;
+        if (!confirm(`Delete pattern?`)) return;
+        const sId = document.getElementById('targetSeries').value;
         try {
-            const response = await fetch(`/api/rules/${encodeURIComponent(ruleId)}`, { method: 'DELETE' });
+            const response = await fetch(`/api/series/${encodeURIComponent(sId)}/rules/${ruleId}`, { method: 'DELETE' });
             if (response.ok) location.reload();
-            else alert('Failed to delete rule');
+            else alert('Failed to delete pattern');
         } catch (error) { alert('Error: ' + error.message); }
     }
     async function clearSeriesColor() {
