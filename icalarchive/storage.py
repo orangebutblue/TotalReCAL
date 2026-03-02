@@ -16,6 +16,10 @@ class EventStore:
         self.store_dir.mkdir(parents=True, exist_ok=True)
         self.sources_dir.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        
+        # Performance Cache
+        # Map source_name -> (file_mtime_float, dict_of_events)
+        self._cache: Dict[str, tuple[float, Dict[str, Event]]] = {}
     
     def get_store_path(self, source_name: str) -> Path:
         """Get path to store file for a source."""
@@ -37,8 +41,16 @@ class EventStore:
         path = self.get_store_path(source_name)
         if not path.exists():
             return {}
-        
+            
         try:
+            current_mtime = path.stat().st_mtime
+            
+            # Check cache
+            if source_name in self._cache:
+                cached_mtime, cached_events = self._cache[source_name]
+                if cached_mtime == current_mtime:
+                    return cached_events
+                    
             with open(path, 'rb') as f:
                 cal = Calendar.from_ical(f.read())
             
@@ -48,6 +60,9 @@ class EventStore:
                 if uid:
                     prefixed_uid = f"{source_name}::{uid}"
                     events[prefixed_uid] = component
+            
+            # Update cache
+            self._cache[source_name] = (current_mtime, events)
             return events
         except Exception:
             return {}
@@ -99,6 +114,11 @@ class EventStore:
             # Save
             with open(path, 'wb') as f:
                 f.write(store_cal.to_ical())
+                
+            # Invalidate cache so it recalculates cleanly next time,
+            # or pre-fill it here if needed. Next load_store will cache it.
+            if source_name in self._cache:
+                del self._cache[source_name]
         
         return new_count
     

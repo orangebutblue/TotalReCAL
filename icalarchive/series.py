@@ -166,10 +166,14 @@ class SeriesManager:
         import re
         for p in patterns:
             if p and p != "*":
+                # Always test if literal is safe, but fallback to regex for advanced queries.
+                # We'll store both the raw string and the optional compiled regex.
+                compiled = None
                 try:
-                    compiled_patterns.append(re.compile(p, re.IGNORECASE))
+                    compiled = re.compile(p, re.IGNORECASE)
                 except Exception:
                     pass
+                compiled_patterns.append((p.lower(), compiled))
         
         if has_star:
             matched_uids = set(scope_uids)
@@ -178,8 +182,16 @@ class SeriesManager:
                 event = all_events.get(uid)
                 if event:
                     summary = str(event.get('SUMMARY', ''))
-                    if any(cp.search(summary) for cp in compiled_patterns):
-                        matched_uids.add(uid)
+                    summary_lower = summary.lower()
+                    
+                    # Match if ANY pattern fits (either exact substring OR regex search)
+                    for raw_p, cp in compiled_patterns:
+                        if raw_p in summary_lower:
+                            matched_uids.add(uid)
+                            break
+                        if cp and cp.search(summary):
+                            matched_uids.add(uid)
+                            break
 
         # 3. Apply Forced Includes overrides
         manual_includes = set(series.get("manual_includes", []))
