@@ -21,15 +21,33 @@
 
         <div class="d-flex align-items-center ms-lg-4 mt-2 mt-lg-0 border rounded p-1 shadow-sm bg-white">
             <span class="text-muted small fw-bold text-uppercase ms-2 me-2">Color:</span>
+
+            <datalist id="suggestedColors">
+                <option value="#0d6efd"></option>
+                <option value="#198754"></option>
+                <option value="#dc3545"></option>
+                <option value="#ffc107"></option>
+                <option value="#0dcaf0"></option>
+                <option value="#6f42c1"></option>
+                <option value="#fd7e14"></option>
+                <option value="#20c997"></option>
+                <!-- Existing series colors -->
+                {% for sid, sdata in state.series_manager.get_all_series().items() %}
+                {% if sdata.get('color') %}
+                <option value="{{ sdata.color }}"></option>
+                {% endif %}
+                {% endfor %}
+            </datalist>
+
             {% if series.get('color') %}
             <input type="color" class="form-control form-control-color border-0 shadow-sm p-0 m-0"
-                style="width: 32px; height: 32px; cursor: pointer;" id="seriesColorPicker"
+                style="width: 32px; height: 32px; cursor: pointer;" id="seriesColorPicker" list="suggestedColors"
                 value="{{ series.get('color') }}" title="Change assigned color" onchange="updateSeriesColor()">
             {% else %}
             <div class="d-inline-block position-relative shadow-sm bg-light border rounded"
                 style="width: 32px; height: 32px; cursor: pointer;"
                 title="Inheriting Source Colors. Click to override.">
-                <input type="color"
+                <input type="color" list="suggestedColors"
                     class="form-control form-control-color w-100 h-100 border-0 opacity-0 position-absolute top-0 start-0"
                     id="seriesColorPicker" value="#0d6efd" onchange="updateSeriesColor()" style="cursor: pointer;">
                 <div class="w-100 h-100 d-flex align-items-center justify-content-center" style="pointer-events: none;">
@@ -276,6 +294,8 @@
             if (!response.ok) {
                 const err = await response.json();
                 alert('Error saving color: ' + (err.detail || 'Unknown server error'));
+            } else {
+                location.reload();
             }
         } catch (e) {
             alert('Network Error: ' + e.message);

@@ -453,10 +453,22 @@ async def delete_output(name: str):
 # Rule API endpoints
 @app.get("/api/rules")
 async def list_rules():
-    """List all global hide rules (match patterns in hidden series)."""
+    """List all global hide rules and series auto-assign rules."""
+    all_rules = []
+    
+    # 1. System Hidden Rules
     hidden_series = state.series_manager._cache.get("hidden", {})
     patterns = hidden_series.get("match_patterns", [])
-    return [{"rule_id": p, "rule_type": "summary_regex", "params": {"pattern": p}} for p in patterns]
+    all_rules.extend([{"rule_id": p, "rule_type": "summary_regex", "series": "hidden", "params": {"pattern": p}} for p in patterns])
+    
+    # 2. Custom Series Rules
+    for sid, sdata in state.series_manager.get_all_series().items():
+        if sid == "hidden":
+            continue
+        patterns = sdata.get("match_patterns", [])
+        all_rules.extend([{"rule_id": p, "rule_type": "summary_regex", "series": sdata["name"], "series_id": sid, "params": {"pattern": p}} for p in patterns])
+        
+    return all_rules
 
 @app.post("/api/rules")
 async def create_rule(rule: RuleCreate):
@@ -522,8 +534,20 @@ async def events_page(request: Request):
 async def get_all_events():
     """Get all events unpaginated for client-side search."""
     all_events = state.event_store.load_all_events()
+    
+    # Mathematical O(N) Reverse-Indexing
     hidden_uids = state.series_manager.resolve_series("hidden", all_events)
     
+    uid_to_series = {}
+    for sid, sdata in state.series_manager.get_all_series().items():
+        if sid == "hidden":
+            continue
+        resolved_uids = state.series_manager.resolve_series(sid, all_events)
+        for r_uid in resolved_uids:
+            if r_uid not in uid_to_series:
+                uid_to_series[r_uid] = []
+            uid_to_series[r_uid].append({"id": sid, "name": sdata["name"], "color": sdata.get("color")})
+            
     events_out = []
     for uid, event in all_events.items():
         start = event.get('DTSTART')
@@ -537,7 +561,7 @@ async def get_all_events():
             'start': start.dt.isoformat() if start and hasattr(start, 'dt') else "",
             'end': end.dt.isoformat() if end and hasattr(end, 'dt') else "",
             'hidden': uid in hidden_uids,
-            'in_series': len(state.series_manager.get_series_for_event(uid, all_events)) > 0
+            'in_series': uid in uid_to_series
         })
         
     events_out.sort(key=lambda x: x['start'], reverse=True)
@@ -548,9 +572,20 @@ async def get_all_events():
 async def get_calendar_events(source: Optional[str] = None, show_hidden: bool = True):
     """Feed for FullCalendar.js."""
     all_events = state.event_store.load_all_events()
-    hidden_uids = state.series_manager.resolve_series("hidden", all_events)
     config = state.config_manager.load()
     
+    # Mathematical O(N) Reverse-Indexing
+    hidden_uids = state.series_manager.resolve_series("hidden", all_events)
+    uid_to_series = {}
+    for sid, sdata in state.series_manager.get_all_series().items():
+        if sid == "hidden":
+            continue
+        resolved_uids = state.series_manager.resolve_series(sid, all_events)
+        for r_uid in resolved_uids:
+            if r_uid not in uid_to_series:
+                uid_to_series[r_uid] = []
+            uid_to_series[r_uid].append({"id": sid, "name": sdata["name"], "color": sdata.get("color")})
+            
     events_out = []
     for uid, event in all_events.items():
         if source and not uid.startswith(f"{source}::"):
@@ -570,18 +605,17 @@ async def get_calendar_events(source: Optional[str] = None, show_hidden: bool = 
         source_name = uid.split('::', 1)[0]
         source_color = getattr(config.sources.get(source_name, {}), 'color', '#0d6efd')
         
-        # Check series membership indicator
-        assigned_series = state.series_manager.get_series_for_event(uid, all_events)
+        # Pull mapped series instantly
+        assigned_series = uid_to_series.get(uid, [])
         is_in_series = len(assigned_series) > 0
+        
         title_prefix = "🔗 " if is_in_series else ""
         title = title_prefix + str(event.get('SUMMARY', ''))
         
         # Determine Color Priority
         final_color = '#dc3545' if hidden else source_color
         if is_in_series and not hidden:
-            s_id = assigned_series[0]['id']
-            series_data = state.series_manager.get_all_series().get(s_id, {})
-            s_color = series_data.get('color')
+            s_color = assigned_series[0].get('color')
             if s_color and s_color != '#6c757d': # Allow legacy overrides to fallback safely
                 final_color = s_color
             
