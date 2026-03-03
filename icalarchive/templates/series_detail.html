@@ -32,7 +32,7 @@
                 <option value="#fd7e14"></option>
                 <option value="#20c997"></option>
                 <!-- Existing series colors -->
-                {% for sid, sdata in state.series_manager.get_all_series().items() %}
+                {% for sid, sdata in series_data.items() %}
                 {% if sdata.get('color') %}
                 <option value="{{ sdata.color }}"></option>
                 {% endif %}

@@ -761,6 +761,7 @@ async def series_detail_page(request: Request, series_id: str):
     
     return templates.TemplateResponse("series_detail.html", {
         "request": request,
+        "series_data": series_map,
         "series": s_data,
         "series_id": series_id,
         "events": bound_events,
