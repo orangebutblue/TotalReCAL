@@ -800,9 +800,17 @@ async def series_page(request: Request):
             'source': uid.split('::', 1)[0]
         }
         
+    display_series = {}
+    for sid, sdata in state.series_manager.get_all_series().items():
+        if sid == "hidden":
+            continue
+        resolved = state.series_manager.resolve_series(sid, all_events)
+        display_series[sid] = dict(sdata)
+        display_series[sid]['event_uids'] = list(resolved)
+        
     return templates.TemplateResponse("series.html", {
         "request": request,
-        "series_data": state.series_manager.get_all_series(),
+        "series_data": display_series,
         "events": clean_events
     })
 
