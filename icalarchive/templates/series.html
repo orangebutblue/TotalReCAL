@@ -53,6 +53,10 @@
         </div>
 
         <div class="btn-group shadow-sm">
+            <input type="radio" class="btn-check" name="orientation" id="orientHoriz" value="horizontal" checked
+                onchange="renderMatrix()">
+            <label class="btn btn-outline-secondary" for="orientHoriz"><i class="bi bi-arrow-right"></i>
+                Horizontal</label>
             <input type="radio" class="btn-check" name="orientation" id="orientVert" value="vertical"
                 onchange="renderMatrix()">
             <label class="btn btn-outline-secondary" for="orientVert"><i class="bi bi-arrow-down"></i> Vertical</label>
@@ -308,7 +312,11 @@
             card.className = 'card shadow-sm border-0';
             card.style.borderLeft = `4px solid ${item.color} !important`;
             card.style.minWidth = modeOrient === 'horizontal' ? '200px' : 'auto';
-            card.style.maxWidth = '250px';
+            if (modeScale === 'agenda' && modeOrient === 'vertical') {
+                card.style.maxWidth = '100%';
+            } else {
+                card.style.maxWidth = '250px';
+            }
             card.style.zIndex = '5';
             card.dataset.time = item.time;
 

@@ -72,7 +72,7 @@ from datetime import datetime
 try:
     __version__ = importlib.metadata.version('icalarchive')
 except Exception:
-    __version__ = '0.3.0'
+    __version__ = '0.4.0'
 
 # Automatically generate dynamic build numbers during development
 try:
