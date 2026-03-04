@@ -97,9 +97,12 @@
     let calendar;
     let selectedEventUid = null;
     let selectedEventIsHidden = false;
+    let lastEventInfo = null;
     const eventModal = new bootstrap.Modal(document.getElementById('eventModal'));
 
-    async function loadSeriesAndCheckEvent() {
+    async function loadSeriesAndCheckEvent(info) {
+        if (info) lastEventInfo = info;
+        else info = lastEventInfo;
         try {
             const response = await fetch('/api/series');
             const data = await response.json();
@@ -118,17 +121,29 @@
                 opt.textContent = s.name;
                 select.appendChild(opt);
 
-                // Track if event is already in this series
-                if (selectedEventUid && s.event_uids && s.event_uids.includes(selectedEventUid)) {
-                    containingSeries.push({ id: id, name: s.name });
+                // In the Calendar, an event may be attached to existing series dynamically via patterns/rules
+                // extendedProps now securely provides 'series' names and 'series_ids' respectively
+                let eventIsBound = false;
+                if (info && info.event && info.event.extendedProps && info.event.extendedProps.series_ids) {
+                    const boundIds = info.event.extendedProps.series_ids;
+                    const boundNames = info.event.extendedProps.series;
+
+                    for (let i = 0; i < boundIds.length; i++) {
+                        const sid = boundIds[i];
+                        const sname = boundNames[i];
+                        eventIsBound = true;
+                        containingSeries.push({ id: sid, name: sname });
+                    }
                 }
-            }
+
+            } // <-- Close object loop here
 
             if (containingSeries.length > 0) {
                 currentSeriesDiv.innerHTML = containingSeries.map(s =>
-                    `<span class="badge bg-primary text-light shadow-sm fs-6 d-inline-flex align-items-center p-2 align-self-start">${s.name} 
-                            <button type="button" class="btn-close btn-close-white ms-2" style="font-size: 0.5em;" onclick="unbindSeries('${s.id}')" title="Unbind"></button>
-                        </span>`
+                    `<div class="d-inline-flex align-items-center mb-1 me-2 pt-1 pb-1 ps-2 pe-1 bg-primary text-light shadow-sm rounded">
+                        <a href="/series/${s.id}" class="text-white text-decoration-none fw-bold me-2" style="font-size: 0.9em;">${s.name}</a>
+                        <button type="button" class="btn-close btn-close-white" style="font-size: 0.5em;" onclick="unbindSeries('${s.id}')" title="Unbind"></button>
+                    </div>`
                 ).join('');
             } else {
                 currentSeriesDiv.innerHTML = '<span class="text-muted small border px-2 py-1 rounded w-auto align-self-start">No bindings</span>';
@@ -230,7 +245,7 @@
                     toggleBtn.className = 'btn btn-danger btn-sm px-3 shadow-sm fw-bold';
                 }
 
-                loadSeriesAndCheckEvent();
+                loadSeriesAndCheckEvent(info);
                 eventModal.show();
             }
         });

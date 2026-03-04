@@ -629,6 +629,7 @@ async def get_calendar_events(source: Optional[str] = None, show_hidden: bool = 
                 'source': source_name,
                 'hidden': hidden,
                 'series': [s['name'] for s in assigned_series],
+                'series_ids': [s['id'] for s in assigned_series],
                 'location': str(event.get('LOCATION', '')),
                 'description': str(event.get('DESCRIPTION', ''))
             }

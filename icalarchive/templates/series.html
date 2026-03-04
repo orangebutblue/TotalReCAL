@@ -53,10 +53,6 @@
         </div>
 
         <div class="btn-group shadow-sm">
-            <input type="radio" class="btn-check" name="orientation" id="orientHoriz" value="horizontal" checked
-                onchange="renderMatrix()">
-            <label class="btn btn-outline-secondary" for="orientHoriz"><i class="bi bi-arrow-right"></i>
-                Horizontal</label>
             <input type="radio" class="btn-check" name="orientation" id="orientVert" value="vertical"
                 onchange="renderMatrix()">
             <label class="btn btn-outline-secondary" for="orientVert"><i class="bi bi-arrow-down"></i> Vertical</label>
@@ -182,8 +178,14 @@
                     time: t,
                     dateStr: ev.start ? (() => {
                         const d = new Date(ev.start);
-                        return `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}. ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                        const endD = ev.end ? new Date(ev.end) : null;
+                        let s = `${d.getDate().toString().padStart(2, '0')}.${(d.getMonth() + 1).toString().padStart(2, '0')}. ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                        if (endD) {
+                            s += ` - ${endD.getHours().toString().padStart(2, '0')}:${endD.getMinutes().toString().padStart(2, '0')}`;
+                        }
+                        return s;
                     })() : 'Unknown Date',
+                    endTime: ev.end ? new Date(ev.end).getTime() : t + (1000 * 60 * 60), // fallback to 1 hr
                     seriesId: sId,
                     seriesName: sData.name,
                     color: seriesColor
@@ -232,8 +234,8 @@
 
         let items = parseItems();
         if (hidePast) {
-            const cutoff = Date.now() - (1000 * 60 * 60 * 24); // Hide anything older than 24h
-            items = items.filter(i => i.time >= cutoff);
+            const cutoff = Date.now();
+            items = items.filter(i => i.endTime >= cutoff);
         }
 
         if (items.length === 0) {
@@ -265,7 +267,10 @@
 
             if (titleText) {
                 const title = document.createElement('a');
-                title.href = '/series/' + trackId;
+                // The master timeline doesn't actually exist as a workspace, so strip its href completely
+                if (trackId !== 'track_single') {
+                    title.href = '/series/' + trackId;
+                }
                 title.className = 'fw-bold mb-3 text-uppercase badge border p-2 w-100 text-start d-block text-decoration-none';
                 title.style.color = 'white';
                 title.style.backgroundColor = trackColor || '#6c757d';
@@ -307,7 +312,7 @@
             card.style.zIndex = '5';
             card.dataset.time = item.time;
 
-            const isPast = item.time < Date.now();
+            const isPast = item.endTime < Date.now();
             if (isPast) {
                 card.style.opacity = '0.5';
                 card.style.backgroundColor = '#f8f9fa';
@@ -315,11 +320,6 @@
 
             let displayTitle = `#${item.seq} - ${item.title}`;
             let displayBadge = `<span class="badge text-white mb-1" style="background-color: ${item.color}">${item.seriesName}</span>`;
-
-            // Deduplication Logic - if we are already in Multi-Track where the column header declares the Series, hide the series badge
-            if (modeTrack === 'multi') {
-                displayBadge = '';
-            }
 
             card.innerHTML = `
                 <div class="card-body p-2 bg-white rounded">
@@ -514,10 +514,11 @@
             for (const [sId, sData] of Object.entries(seriesMap)) {
                 if (sData.event_uids.length === 0) continue;
 
-                const tid = 'track_multi_' + trackIdx;
+                // Fetch the deterministic color loop algorithm mapping from parseItems
+                const trackColor = colors[trackIdx % colors.length];
                 trackIdx++;
 
-                const [wrap, track] = createTrackCol(sData.name, tid);
+                const [wrap, track] = createTrackCol(sData.name, sId, trackColor);
                 items.filter(i => i.seriesId === sId).forEach(item => {
                     track.appendChild(createCard(item, track));
                 });
@@ -564,6 +565,27 @@
         if (savedZoomVal) document.getElementById('calendarZoomVal').value = savedZoomVal;
         if (savedZoomUnit) document.getElementById('calendarZoomUnit').value = savedZoomUnit;
         if (savedHidePast !== null) document.getElementById('hidePastToggle').checked = savedHidePast === 'true';
+
+        // Mutex display toggles
+        document.querySelectorAll('input[name="scaleMode"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                const multiTrackLabel = document.querySelector('label[for="trackMulti"]');
+                const multiTrackInput = document.getElementById('trackMulti');
+                const singleTrackInput = document.getElementById('trackSingle');
+                if (e.target.value === 'agenda') {
+                    multiTrackLabel.style.display = 'none';
+                    if (multiTrackInput.checked) {
+                        singleTrackInput.checked = true;
+                    }
+                } else {
+                    multiTrackLabel.style.display = 'inline-block';
+                }
+            });
+        });
+
+        // Trigger the mutex logic on initial load
+        const activeScale = document.querySelector('input[name="scaleMode"]:checked');
+        if (activeScale) activeScale.dispatchEvent(new Event('change'));
 
         renderMatrix();
     });
