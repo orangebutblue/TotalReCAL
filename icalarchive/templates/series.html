@@ -293,11 +293,11 @@
                 // Calendar scale - requires absolute boundaries for rendering
                 track.style.position = 'relative';
                 if (modeOrient === 'horizontal') {
-                    track.style.height = '120px'; // Initial height, expands if collisions happen
+                    track.style.height = '100px'; // Initial height, expands if collisions happen
                     track.style.width = pxPerMs ? trackPixels + 'px' : '100%';
                     track.style.borderBottom = '1px solid #dee2e6';
                 } else {
-                    track.style.width = '250px';
+                    track.style.width = '180px';
                     track.style.minHeight = pxPerMs ? trackPixels + 'px' : '600px';
                     track.style.borderRight = '1px solid #dee2e6';
                 }
@@ -311,11 +311,11 @@
             const card = document.createElement('div');
             card.className = 'card shadow-sm border-0';
             card.style.borderLeft = `4px solid ${item.color} !important`;
-            card.style.minWidth = modeOrient === 'horizontal' ? '200px' : 'auto';
+            card.style.minWidth = modeOrient === 'horizontal' ? '160px' : 'auto';
             if (modeScale === 'agenda' && modeOrient === 'vertical') {
                 card.style.maxWidth = '100%';
             } else {
-                card.style.maxWidth = '250px';
+                card.style.maxWidth = '170px';
             }
             card.style.zIndex = '5';
             card.dataset.time = item.time;
@@ -358,7 +358,7 @@
                         let collision = false;
                         for (let rect of placedRects) {
                             if (rect.trackId === trackId) {
-                                const hOverlap = Math.abs(actLeft - rect.left) < 220; // assumed card width 200 + gap
+                                const hOverlap = Math.abs(actLeft - rect.left) < 170; // assumed card width 160 + gap
                                 const vOverlap = Math.abs(curTop - rect.top) < 80;    // assumed card height 70 + gap
                                 if (hOverlap && vOverlap) { collision = true; break; }
                             }
@@ -369,7 +369,7 @@
                     card.style.top = curTop + 'px';
                     // Expand horizontal track visually if vertical packing pushes it out of bounds
                     if (curTop + 90 > parseInt(trackDomElement.style.height || 0)) {
-                        trackDomElement.style.height = (curTop + 110) + 'px';
+                        trackDomElement.style.height = (curTop + 100) + 'px';
                     }
 
                     placedRects.push({ trackId: trackId, left: actLeft, top: curTop });
@@ -384,17 +384,17 @@
                         for (let rect of placedRects) {
                             if (rect.trackId === trackId) {
                                 const vOverlap = Math.abs(actTop - rect.top) < 80;
-                                const hOverlap = Math.abs(curLeft - rect.left) < 220;
+                                const hOverlap = Math.abs(curLeft - rect.left) < 180;
                                 if (hOverlap && vOverlap) { collision = true; break; }
                             }
                         }
-                        if (collision) curLeft += 230; else break;
+                        if (collision) curLeft += 180; else break;
                     }
 
                     card.style.left = curLeft + 'px';
                     // Expand vertical track width if horizontal packing pushes it out
-                    if (curLeft + 250 > parseInt(trackDomElement.style.width || 0)) {
-                        trackDomElement.style.width = (curLeft + 270) + 'px';
+                    if (curLeft + 180 > parseInt(trackDomElement.style.width || 0)) {
+                        trackDomElement.style.width = (curLeft + 200) + 'px';
                     }
 
                     placedRects.push({ trackId: trackId, left: curLeft, top: actTop });
