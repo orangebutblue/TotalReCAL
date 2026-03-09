@@ -90,6 +90,8 @@
                     <td>
                         <button class="btn btn-sm btn-outline-primary" onclick="fetchNow('{{ source.name }}')">Fetch
                             Now</button>
+                        <button class="btn btn-sm btn-outline-warning" onclick="deduplicateNow('{{ source.name }}')">Deduplicate
+                            </button>
                         <button class="btn btn-sm btn-outline-danger"
                             onclick="deleteSource('{{ source.name }}')">Delete</button>
                     </td>
@@ -177,6 +179,25 @@
                 setTimeout(() => location.reload(), 2000);
             } else {
                 alert('Failed to trigger fetch');
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        }
+    }
+
+    async function deduplicateNow(name) {
+        if (!confirm(`Run deduplication on ${name}? This will remove identical events that have different UIDs.`)) return;
+
+        try {
+            const response = await fetch(`/api/sources/${encodeURIComponent(name)}/deduplicate`, {
+                method: 'POST'
+            });
+            if (response.ok) {
+                const data = await response.json();
+                alert(`Deduplication complete! Removed ${data.removed_count} duplicate events.`);
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                alert('Failed to trigger deduplication');
             }
         } catch (error) {
             alert('Error: ' + error.message);
