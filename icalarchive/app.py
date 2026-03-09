@@ -330,6 +330,17 @@ async def trigger_fetch(name: str):
     
     return {"status": "fetched"}
 
+@app.post("/api/sources/{name}/deduplicate")
+async def trigger_deduplicate(name: str):
+    """Trigger retroactive deduplication for a source."""
+    config = state.config_manager.load()
+    
+    if name not in config.sources:
+        raise HTTPException(status_code=404, detail="Source not found")
+        
+    removed_count = state.event_store.deduplicate_store(name)
+    return {"status": "deduplicated", "removed_count": removed_count}
+
 
 # Event API endpoints
 @app.get("/api/events")

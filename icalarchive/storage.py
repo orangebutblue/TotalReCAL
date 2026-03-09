@@ -81,15 +81,41 @@ class EventStore:
         existing = self.load_store(source_name)
         new_count = 0
         
+        def get_prop_val(comp, prop):
+            p = comp.get(prop)
+            return p.to_ical() if hasattr(p, 'to_ical') else p
+        
+        # Build signatures for existing events to quickly find duplicates
+        existing_signatures = set()
+        for evt in existing.values():
+            sig = (
+                get_prop_val(evt, 'SUMMARY'),
+                get_prop_val(evt, 'DTSTART'),
+                get_prop_val(evt, 'DTEND'),
+                get_prop_val(evt, 'LOCATION')
+            )
+            existing_signatures.add(sig)
+        
         # Extract events from new calendar
         new_events = {}
         for component in new_calendar.walk('VEVENT'):
             uid = component.get('UID')
-            if uid:
-                prefixed_uid = f"{source_name}::{uid}"
-                if prefixed_uid not in existing:
-                    new_events[prefixed_uid] = component
-                    new_count += 1
+            if not uid:
+                continue
+                
+            sig = (
+                get_prop_val(component, 'SUMMARY'),
+                get_prop_val(component, 'DTSTART'),
+                get_prop_val(component, 'DTEND'),
+                get_prop_val(component, 'LOCATION')
+            )
+            
+            prefixed_uid = f"{source_name}::{uid}"
+            
+            if sig not in existing_signatures and prefixed_uid not in existing and prefixed_uid not in new_events:
+                new_events[prefixed_uid] = component
+                existing_signatures.add(sig)
+                new_count += 1
         
         if new_count == 0:
             return 0
@@ -138,3 +164,53 @@ class EventStore:
             'event_count': len(events),
             'last_fetch': last_fetch,
         }
+
+    def deduplicate_store(self, source_name: str) -> int:
+        """Remove duplicate events from an existing store. Returns number of removed duplicates."""
+        existing_events = self.load_store(source_name)
+        if not existing_events:
+            return 0
+            
+        def get_prop_val(comp, prop):
+            p = comp.get(prop)
+            return p.to_ical() if hasattr(p, 'to_ical') else p
+            
+        unique_signatures = set()
+        deduplicated_events = {}
+        removed_count = 0
+        
+        for uid, component in existing_events.items():
+            sig = (
+                get_prop_val(component, 'SUMMARY'),
+                get_prop_val(component, 'DTSTART'),
+                get_prop_val(component, 'DTEND'),
+                get_prop_val(component, 'LOCATION')
+            )
+            
+            if sig not in unique_signatures:
+                unique_signatures.add(sig)
+                deduplicated_events[uid] = component
+            else:
+                removed_count += 1
+                
+        if removed_count == 0:
+            return 0
+            
+        # Resave deduplicated events
+        with self._lock:
+            path = self.get_store_path(source_name)
+            
+            store_cal = Calendar()
+            store_cal.add('prodid', '-//ICalArchive//EN')
+            store_cal.add('version', '2.0')
+            
+            for event in deduplicated_events.values():
+                store_cal.add_component(event)
+                
+            with open(path, 'wb') as f:
+                f.write(store_cal.to_ical())
+                
+            if source_name in self._cache:
+                del self._cache[source_name]
+                
+        return removed_count
